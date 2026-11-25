@@ -497,3 +497,81 @@ def test_geographic_summary_validates_columns_and_measure():
         build_geographic_summary(
             pd.DataFrame({"area": ["A"], "count": ["unknown"]}), "area", "count"
         )
+
+
+def test_one_sample_t_test_reports_ci_effect_and_significance():
+    from analytics import run_statistical_test
+    df = pd.DataFrame({"score": [2, 3, 4, 5, 6]})
+    result = run_statistical_test(
+        df, "One-sample t-test", "score", hypothesized_mean=0, alpha=0.05
+    )
+    assert result["n"] == 5
+    assert result["p_value"] < 0.05
+    assert result["effect_size_name"] == "Cohen's d (one-sample)"
+    assert result["confidence_interval"][0] < 4 < result["confidence_interval"][1]
+
+
+def test_welch_t_test_handles_unequal_sample_sizes_and_reports_ci():
+    from analytics import run_statistical_test
+    df = pd.DataFrame({
+        "group": ["A"] * 5 + ["B"] * 8,
+        "value": [1, 2, 3, 4, 5, 5, 6, 7, 8, 9, 10, 11, 12],
+    })
+    result = run_statistical_test(df, "Independent-samples Welch t-test", "value", group_column="group")
+    assert result["n"] == 13
+    assert result["degrees_of_freedom"] > 0
+    assert len(result["confidence_interval"]) == 2
+    assert result["group_summary"]["n"].tolist() == [5, 8]
+
+
+def test_one_way_anova_returns_eta_squared_and_variance_warning():
+    from analytics import run_statistical_test
+    df = pd.DataFrame({
+        "group": ["A"] * 4 + ["B"] * 4 + ["C"] * 4,
+        "value": [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13],
+    })
+    result = run_statistical_test(df, "One-way ANOVA", "value", group_column="group")
+    assert result["p_value"] < 0.05
+    assert 0 <= result["effect_size"] <= 1
+    assert result["degrees_of_freedom"] == [2, 9]
+
+
+def test_chi_square_returns_contingency_expected_counts_and_cramers_v():
+    from analytics import run_statistical_test
+    df = pd.DataFrame({
+        "region": ["North"] * 20 + ["South"] * 20,
+        "choice": ["A"] * 15 + ["B"] * 5 + ["A"] * 5 + ["B"] * 15,
+    })
+    result = run_statistical_test(
+        df, "Chi-square test of independence", "region", group_column="choice"
+    )
+    assert result["n"] == 40
+    assert result["contingency"].shape == (2, 2)
+    assert result["expected_frequencies"].shape == (2, 2)
+    assert result["effect_size_name"] == "Cramer's V"
+    assert 0 <= result["effect_size"] <= 1
+
+
+def test_statistical_test_rejects_small_samples_bad_groups_and_invalid_alpha():
+    from analytics import run_statistical_test
+    with pytest.raises(ValueError, match="at least two finite"):
+        run_statistical_test(pd.DataFrame({"x": [1]}), "One-sample t-test", "x")
+    with pytest.raises(ValueError, match="exactly two groups"):
+        run_statistical_test(
+            pd.DataFrame({"g": ["a", "a", "b", "b", "c", "c"], "x": [1, 2, 3, 4, 5, 6]}),
+            "Independent-samples Welch t-test", "x", group_column="g"
+        )
+    with pytest.raises(ValueError, match="alpha"):
+        run_statistical_test(pd.DataFrame({"x": [1, 2]}), "One-sample t-test", "x", alpha=1)
+
+
+def test_statistical_test_rejects_zero_variance_and_sparse_chi_square_is_flagged():
+    from analytics import run_statistical_test
+    with pytest.raises(ValueError, match="zero variance"):
+        run_statistical_test(pd.DataFrame({"x": [2, 2, 2]}), "One-sample t-test", "x")
+    sparse = pd.DataFrame({
+        "a": ["x"] * 5 + ["y"] * 2,
+        "b": ["m", "n", "o", "p", "q", "m", "n"],
+    })
+    result = run_statistical_test(sparse, "Chi-square test of independence", "a", group_column="b")
+    assert any("expected cell counts" in warning for warning in result["warnings"])
