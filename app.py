@@ -1347,4 +1347,5 @@ with tabs[16]:
         st.rerun()
     if st.button("Clear conversation", key="clear_dataset_chat"):
         st.session_state.chat_history = []
+        st.session_state.chat_context = None
         st.rerun()
