@@ -390,3 +390,58 @@ def test_baseline_forecast_handles_zero_values_in_smape():
     result = forecast_time_series_baseline([0, 0, 0, 0, 0, 0, 0, 0], horizon=1)
     assert result["metrics"]["smape_pct"] == 0.0
     assert np.isfinite(result["metrics"]["mae"])
+
+
+
+def test_dataset_comparison_reports_overview_schema_and_numeric_differences():
+    from analytics import compare_datasets
+    reference = pd.DataFrame({
+        "year": [2022, 2023, 2024],
+        "exports": [10.0, 20.0, 30.0],
+        "region": ["North", "South", "North"],
+    })
+    comparison = pd.DataFrame({
+        "year": [2023, 2024, 2025, 2026],
+        "exports": [20.0, 30.0, 50.0, 60.0],
+        "region": ["South", "South", "East", None],
+        "new_indicator": [1, 2, 3, 4],
+    })
+    result = compare_datasets(reference, comparison)
+    assert result["summary"]["rows"].tolist() == [3, 4]
+    assert "new_indicator" in result["schema"]["column"].tolist()
+    exports = result["numeric"].set_index("column")
+    assert exports.loc["exports", "reference_mean"] == pytest.approx(20.0)
+    assert exports.loc["exports", "comparison_mean"] == pytest.approx(40.0)
+    assert exports.loc["exports", "mean_difference"] == pytest.approx(20.0)
+    assert not result["categorical"].empty
+    assert result["warnings"] == []
+
+
+def test_dataset_comparison_handles_zero_reference_mean_and_missing_shared_columns():
+    from analytics import compare_datasets
+    result = compare_datasets(
+        pd.DataFrame({"value": [0.0, 0.0], "left_only": ["a", "b"]}),
+        pd.DataFrame({"value": [2.0, 4.0], "right_only": [1, 2]}),
+    )
+    value = result["numeric"].iloc[0]
+    assert pd.isna(value["mean_difference_pct"])
+    assert result["shared_columns"] == ["value"]
+    assert result["categorical"].empty
+    assert result["schema"]["column"].tolist() == ["value", "left_only", "right_only"]
+
+
+def test_dataset_comparison_rejects_empty_or_invalid_inputs():
+    from analytics import compare_datasets
+    with pytest.raises(ValueError, match="both datasets"):
+        compare_datasets(pd.DataFrame({"x": []}), pd.DataFrame({"x": [1]}))
+    with pytest.raises(ValueError, match="DataFrames"):
+        compare_datasets({"x": [1]}, pd.DataFrame({"x": [1]}))
+
+
+def test_dataset_comparison_skips_high_cardinality_categories_with_warning():
+    from analytics import compare_datasets
+    left = pd.DataFrame({"category": [f"c{i}" for i in range(5)]})
+    right = pd.DataFrame({"category": [f"d{i}" for i in range(5)]})
+    result = compare_datasets(left, right, categorical_limit=3)
+    assert result["categorical"].empty
+    assert any("categorical distribution skipped" in warning for warning in result["warnings"])
