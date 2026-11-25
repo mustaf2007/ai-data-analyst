@@ -12,7 +12,7 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from analytics import (
-    DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset, build_time_series_analysis,
+    DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset, build_time_series_analysis, forecast_time_series_baseline,
     numeric_summary, categorical_summary, correlation_matrix, grouped_summary,
     infer_datetime_columns, generate_insights, generate_detailed_insights, build_data_story, safe_csv_bytes, build_cleaning_report, validate_analysis_readiness, column_quality_diagnostics,
 )
@@ -900,6 +900,33 @@ with tabs[11]:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key="download_time_series_excel",
             )
+            with st.expander("Optional baseline forecast", expanded=False):
+                st.caption("A simple last-observation baseline with chronological holdout evaluation; not a complex predictive model.")
+                forecast_horizon = st.slider("Periods to forecast", 1, 12, 3, key="ts_forecast_horizon")
+                if st.button("Evaluate and generate baseline forecast", key="run_ts_baseline"):
+                    try:
+                        forecast_result = forecast_time_series_baseline(
+                            ts_data["value"], horizon=forecast_horizon
+                        )
+                        forecast_metrics = forecast_result["metrics"]
+                        fcols = st.columns(3)
+                        fcols[0].metric("Training periods", forecast_metrics["training_periods"])
+                        fcols[1].metric("Holdout MAE", f"{forecast_metrics['mae']:.4g}")
+                        fcols[2].metric("Holdout sMAPE", f"{forecast_metrics['smape_pct']:.2f}%")
+                        st.markdown("**Chronological holdout results**")
+                        st.dataframe(forecast_result["validation"], use_container_width=True, hide_index=True)
+                        st.markdown("**Future baseline estimates**")
+                        st.dataframe(forecast_result["forecast"], use_container_width=True, hide_index=True)
+                        st.download_button(
+                            "Download baseline forecast (CSV)",
+                            data=safe_csv_bytes(forecast_result["forecast"]),
+                            file_name="time_series_baseline_forecast.csv",
+                            mime="text/csv", key="download_ts_forecast",
+                        )
+                        for limitation in forecast_result["limitations"]:
+                            st.caption(f"• {limitation}")
+                    except ValueError as exc:
+                        st.warning(str(exc))
             for warning in ts_result["warnings"]:
                 st.warning(warning)
             st.caption(
