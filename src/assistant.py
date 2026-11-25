@@ -96,7 +96,7 @@ def _find_column(question: str, columns) -> object | None:
     return max(matches, key=lambda c: len(str(c))) if matches else None
 
 
-def answer_dataset_question(df: pd.DataFrame, question: str) -> dict:
+def _answer_dataset_question(df: pd.DataFrame, question: str) -> dict:
     """Answer common dataset questions with pandas calculations, never generated guesses."""
     if not isinstance(df, pd.DataFrame) or df.empty:
         return {"answer": "Load a non-empty dataset first.", "evidence": pd.DataFrame(), "intent": "empty"}
@@ -186,3 +186,93 @@ def answer_dataset_question(df: pd.DataFrame, question: str) -> dict:
         "answer": "I can answer questions about dataset size, missing values, duplicate rows, numeric summaries, minimum/maximum/mean/total values, category frequencies, grouped comparisons, and numeric correlations. Please mention the column name in your question. Example: “Which region has the highest sales?”",
         "evidence": pd.DataFrame(), "intent": "unsupported",
     }
+
+
+
+def answer_dataset_question(
+    df: pd.DataFrame,
+    question: str,
+    context: dict | None = None,
+) -> dict:
+    """Answer a question and carry lightweight, dataset-scoped context across turns."""
+    context = context or {}
+    q = str(question or "").strip()
+    low = q.casefold()
+    numeric = df.select_dtypes(include="number").columns.tolist() if isinstance(df, pd.DataFrame) else []
+    categorical = [
+        c for c in df.columns
+        if not pd.api.types.is_numeric_dtype(df[c])
+        and 1 < df[c].nunique(dropna=True) <= 200
+    ] if isinstance(df, pd.DataFrame) else []
+
+    previous_measure = context.get("measure")
+    previous_group = context.get("group")
+    follow_up = any(
+        phrase in low for phrase in (
+            "what about", "how about", "and ", "instead", "also", "then ",
+            "for the same", "that group", "those groups",
+        )
+    ) or low in {"median", "mean", "average", "sum", "total", "maximum", "minimum"}
+
+    # Resolve short follow-ups such as "what about median?" against the last measure.
+    measure = _find_column(q, numeric)
+    group = _find_column(q, categorical)
+    if follow_up and measure is None and previous_measure in numeric:
+        measure = previous_measure
+    if follow_up and group is None and previous_group in categorical:
+        group = previous_group
+
+    # A group-value follow-up (e.g. "What about North?") computes that group's
+    # statistic directly rather than repeating the full grouped ranking.
+    if follow_up and measure in numeric and group in categorical:
+        group_values = df[group].dropna().astype(str).unique().tolist()
+        selected_value = next(
+            (value for value in sorted(group_values, key=len, reverse=True)
+             if value.casefold() in low),
+            None,
+        )
+        if selected_value is not None:
+            work = df.loc[df[group].astype(str).str.casefold() == selected_value.casefold(), measure]
+            values = pd.to_numeric(work, errors="coerce").dropna()
+            agg = (
+                "median" if "median" in low else
+                "sum" if any(term in low for term in ("sum", "total")) else
+                "max" if any(term in low for term in ("highest", "maximum", "max")) else
+                "min" if any(term in low for term in ("lowest", "minimum", "min")) else
+                "mean"
+            )
+            if not values.empty:
+                value = float(getattr(values, agg)())
+                label = {"mean": "average", "median": "median", "sum": "total",
+                         "max": "maximum", "min": "minimum"}[agg]
+                result = {
+                    "answer": f"For {selected_value} in {group}, the {label} {measure} is {value:,.4g}, based on {len(values):,} valid observations.",
+                    "evidence": pd.DataFrame({
+                        group: [selected_value], "measure": [measure],
+                        "statistic": [label], "value": [value],
+                        "valid_observations": [len(values)],
+                    }),
+                    "intent": "group_follow_up",
+                }
+            else:
+                result = {
+                    "answer": f"There are no valid numeric {measure} observations for {selected_value} in {group}.",
+                    "evidence": pd.DataFrame(), "intent": "group_follow_up",
+                }
+            result["context"] = {"measure": measure, "group": group}
+            return result
+
+    resolved_question = q
+    if follow_up and measure in numeric and _find_column(q, numeric) is None:
+        resolved_question = f"{q} {measure}"
+    if follow_up and group in categorical and _find_column(q, categorical) is None:
+        resolved_question = f"{resolved_question} {group}"
+
+    result = _answer_dataset_question(df, resolved_question)
+    detected_measure = _find_column(resolved_question, numeric) or previous_measure
+    detected_group = _find_column(resolved_question, categorical) or previous_group
+    result["context"] = {
+        "measure": detected_measure if detected_measure in numeric else None,
+        "group": detected_group if detected_group in categorical else None,
+    }
+    return result
