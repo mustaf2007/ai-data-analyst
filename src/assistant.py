@@ -104,6 +104,15 @@ def _answer_dataset_question(df: pd.DataFrame, question: str) -> dict:
     if not q:
         return {"answer": "Please enter a question about the active dataset.", "evidence": pd.DataFrame(), "intent": "empty"}
     low = q.casefold()
+    if any(term in low for term in ("recommend", "suggest", "what should i do", "next step", "where should i start")):
+        recommendations = suggest_analyses(df)
+        evidence = pd.DataFrame(recommendations)
+        first = recommendations[0]
+        return {
+            "answer": f"I found {len(recommendations)} suggested next steps. The first recommendation is {first['title']}: {first['reason']} {first['action']}",
+            "evidence": evidence,
+            "intent": "recommendations",
+        }
     numeric = df.select_dtypes(include="number").columns.tolist()
     categorical = [
         c for c in df.columns
