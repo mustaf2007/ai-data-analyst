@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from analytics import (
     DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset,
     numeric_summary, categorical_summary, correlation_matrix, grouped_summary,
-    infer_datetime_columns, generate_insights, safe_csv_bytes, build_cleaning_report, validate_analysis_readiness, column_quality_diagnostics,
+    infer_datetime_columns, generate_insights, generate_detailed_insights, safe_csv_bytes, build_cleaning_report, validate_analysis_readiness, column_quality_diagnostics,
 )
 from modeling import train_predictive_model, detect_anomalies
 from reporting import build_pdf_report
@@ -227,7 +227,7 @@ st.markdown(
 )
 tabs = st.tabs([
     "Dashboard", "Data quality", "Clean data", "Explore", "Relationships",
-    "Predictive modeling", "Anomalies", "Export & report", "Chart Studio",
+    "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights",
 ])
 
 with tabs[0]:
@@ -737,3 +737,33 @@ with tabs[8]:
 
 st.divider()
 st.caption("AI Data Analyst v1.1 · Local session processing · Correlation is not causation.")
+
+
+with tabs[9]:
+    st.caption("Deterministic, data-backed observations generated locally from the active dataset. No external AI service is used.")
+    detailed_findings = generate_detailed_insights(df)
+    if not detailed_findings:
+        st.info("No findings can be generated from an empty dataset.")
+    else:
+        st.markdown(f"#### {len(detailed_findings)} observations")
+        findings_frame = pd.DataFrame(detailed_findings)
+        for index, item in findings_frame.iterrows():
+            with st.container(border=True):
+                st.markdown(f"**{item['area']}**")
+                st.write(item["finding"])
+                st.caption("Evidence: " + item["evidence"])
+                st.caption("Interpretation note: " + item["caveat"])
+        st.download_button(
+            "Download insights (CSV)",
+            data=safe_csv_bytes(findings_frame),
+            file_name="automated_data_insights.csv",
+            mime="text/csv",
+            key="download_detailed_insights",
+        )
+        st.download_button(
+            "Download insights (Excel)",
+            data=excel_bytes(findings_frame),
+            file_name="automated_data_insights.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_detailed_insights_excel",
+        )
