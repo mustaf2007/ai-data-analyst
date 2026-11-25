@@ -834,3 +834,209 @@ def build_geographic_summary(
             "Map visualization requires valid geographic identifiers or coordinates; names alone may be ambiguous.",
         ],
     }
+
+
+def run_statistical_test(
+    df, test_type, outcome_column, *, group_column=None,
+    hypothesized_mean=0.0, alpha=0.05
+):
+    """Run a small set of assumption-aware classical tests on independent observations."""
+    from scipy import stats
+
+    supported = {
+        "One-sample t-test", "Independent-samples Welch t-test",
+        "One-way ANOVA", "Chi-square test of independence",
+    }
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        raise ValueError("Provide a non-empty pandas DataFrame.")
+    if test_type not in supported:
+        raise ValueError("Choose a supported statistical test.")
+    if outcome_column not in df.columns:
+        raise ValueError("The selected outcome column must exist.")
+    if not 0 < float(alpha) < 1:
+        raise ValueError("Alpha must be strictly between 0 and 1.")
+
+    warnings = []
+    result = {
+        "test": test_type, "outcome": str(outcome_column),
+        "group": str(group_column) if group_column is not None else None,
+        "alpha": float(alpha), "n": 0, "statistic": np.nan,
+        "p_value": np.nan, "degrees_of_freedom": None,
+        "effect_size_name": None, "effect_size": np.nan,
+        "confidence_interval": None, "group_summary": pd.DataFrame(),
+        "contingency": pd.DataFrame(), "expected_frequencies": pd.DataFrame(),
+        "warnings": warnings,
+    }
+
+    if test_type in {"One-sample t-test", "Independent-samples Welch t-test", "One-way ANOVA"}:
+        values = pd.to_numeric(df[outcome_column], errors="coerce").replace(
+            [np.inf, -np.inf], np.nan
+        )
+        if test_type == "One-sample t-test":
+            clean = values.dropna().astype(float)
+            if len(clean) < 2:
+                raise ValueError("A one-sample t-test requires at least two finite observations.")
+            if clean.nunique() < 2:
+                raise ValueError("The outcome has zero variance; a t statistic cannot be estimated.")
+            mu = float(hypothesized_mean)
+            if not np.isfinite(mu):
+                raise ValueError("The hypothesized mean must be finite.")
+            test = stats.ttest_1samp(clean, popmean=mu)
+            n = len(clean)
+            mean = float(clean.mean())
+            sd = float(clean.std(ddof=1))
+            se = sd / np.sqrt(n)
+            critical = float(stats.t.ppf(1 - alpha / 2, n - 1))
+            result.update({
+                "n": int(n), "statistic": float(test.statistic),
+                "p_value": float(test.pvalue), "degrees_of_freedom": int(n - 1),
+                "effect_size_name": "Cohen's d (one-sample)",
+                "effect_size": float((mean - mu) / sd),
+                "confidence_interval": [mean - critical * se, mean + critical * se],
+                "group_summary": pd.DataFrame([{
+                    "group": "All observations", "n": n, "mean": mean, "std": sd
+                }]),
+            })
+            result["comparison"] = f"Sample mean compared with {mu:g}"
+            result["confidence_interval_label"] = "Confidence interval for the sample mean"
+        else:
+            if group_column is None or group_column not in df.columns:
+                raise ValueError("Select a valid grouping column.")
+            work = pd.DataFrame({
+                "_value": values,
+                "_group": df[group_column].astype("string").str.strip(),
+            })
+            work = work.dropna(subset=["_value", "_group"])
+            work = work[work["_group"].ne("")]
+            grouped = [
+                (str(label), part["_value"].astype(float).to_numpy())
+                for label, part in work.groupby("_group", sort=True)
+            ]
+            if len(grouped) < 2:
+                raise ValueError("At least two non-empty groups are required.")
+            if any(len(arr) < 2 for _, arr in grouped):
+                raise ValueError("Each group must contain at least two finite observations.")
+            if any(np.var(arr, ddof=1) == 0 for _, arr in grouped):
+                warnings.append("At least one group has zero within-group variance; interpret the test cautiously.")
+            summary = pd.DataFrame([
+                {"group": label, "n": int(len(arr)), "mean": float(np.mean(arr)),
+                 "std": float(np.std(arr, ddof=1))}
+                for label, arr in grouped
+            ])
+            result["n"] = int(sum(len(arr) for _, arr in grouped))
+            result["group_summary"] = summary
+            if test_type == "Independent-samples Welch t-test":
+                if len(grouped) != 2:
+                    raise ValueError("The Welch t-test requires exactly two groups; use one-way ANOVA for more.")
+                (label_a, x), (label_b, y) = grouped
+                if np.var(x, ddof=1) == 0 and np.var(y, ddof=1) == 0:
+                    raise ValueError("Both groups have zero variance; the test cannot be estimated.")
+                test = stats.ttest_ind(x, y, equal_var=False)
+                vx, vy = np.var(x, ddof=1), np.var(y, ddof=1)
+                se2 = vx / len(x) + vy / len(y)
+                if se2 <= 0 or not np.isfinite(se2):
+                    raise ValueError("The standard error could not be estimated.")
+                df_welch = se2 ** 2 / (
+                    (vx / len(x)) ** 2 / (len(x) - 1)
+                    + (vy / len(y)) ** 2 / (len(y) - 1)
+                )
+                se = np.sqrt(se2)
+                critical = float(stats.t.ppf(1 - alpha / 2, df_welch))
+                pooled_var = (
+                    (len(x) - 1) * vx + (len(y) - 1) * vy
+                ) / (len(x) + len(y) - 2)
+                pooled_sd = np.sqrt(pooled_var)
+                effect = (float(np.mean(x)) - float(np.mean(y))) / pooled_sd if pooled_sd > 0 else np.nan
+                difference = float(np.mean(x) - np.mean(y))
+                result.update({
+                    "statistic": float(test.statistic), "p_value": float(test.pvalue),
+                    "degrees_of_freedom": float(df_welch),
+                    "effect_size_name": "Cohen's d (pooled-SD standardization)",
+                    "effect_size": float(effect),
+                    "confidence_interval": [
+                        difference - critical * se, difference + critical * se
+                    ],
+                    "comparison": f"{label_a} minus {label_b}",
+                    "confidence_interval_label": "Confidence interval for the mean difference",
+                })
+                if not np.isfinite(effect):
+                    warnings.append("Cohen's d is unavailable because pooled within-group variance is zero.")
+            else:
+                if len(grouped) < 2:
+                    raise ValueError("One-way ANOVA requires at least two groups.")
+                test = stats.f_oneway(*(arr for _, arr in grouped))
+                grand_mean = float(work["_value"].mean())
+                ss_between = sum(
+                    len(arr) * (float(np.mean(arr)) - grand_mean) ** 2
+                    for _, arr in grouped
+                )
+                ss_total = float(((work["_value"] - grand_mean) ** 2).sum())
+                eta_squared = ss_between / ss_total if ss_total > 0 else np.nan
+                levene = stats.levene(*(arr for _, arr in grouped), center="median")
+                if np.isfinite(levene.pvalue) and levene.pvalue < alpha:
+                    warnings.append("Levene's test suggests unequal group variances; classical one-way ANOVA may be unreliable. Consider Welch ANOVA or a robust alternative.")
+                result.update({
+                    "statistic": float(test.statistic), "p_value": float(test.pvalue),
+                    "degrees_of_freedom": [len(grouped) - 1, result["n"] - len(grouped)],
+                    "effect_size_name": "Eta-squared",
+                    "effect_size": float(eta_squared),
+                    "comparison": "At least one group mean differs",
+                    "confidence_interval_label": None,
+                })
+                if not np.isfinite(eta_squared):
+                    warnings.append("Eta-squared is unavailable because total outcome variance is zero.")
+        if values.isna().any():
+            warnings.append("Rows with missing, non-numeric or non-finite outcome values were excluded.")
+        if len(result["group_summary"]) and (result["group_summary"]["n"] < 5).any():
+            warnings.append("At least one group has fewer than five observations; distributional assumptions are difficult to assess.")
+        warnings.append("The t-test and ANOVA assume independent observations; t-based inference also relies on an approximately normal sampling distribution, especially for small samples.")
+    else:
+        if group_column is None or group_column not in df.columns:
+            raise ValueError("Select a valid second categorical column for the chi-square test.")
+        if outcome_column == group_column:
+            raise ValueError("Choose two different categorical columns.")
+        left = df[outcome_column].astype("string").str.strip()
+        right = df[group_column].astype("string").str.strip()
+        valid = left.notna() & right.notna() & left.ne("") & right.ne("")
+        if not valid.all():
+            warnings.append("Rows with missing or blank categories were excluded.")
+        table = pd.crosstab(left[valid], right[valid])
+        if table.shape[0] < 2 or table.shape[1] < 2:
+            raise ValueError("The chi-square test requires at least two categories in each variable.")
+        chi2, p_value, dof, expected = stats.chi2_contingency(table, correction=False)
+        n = int(table.to_numpy().sum())
+        denom = min(table.shape[0] - 1, table.shape[1] - 1)
+        cramer_v = np.sqrt(chi2 / (n * denom)) if n > 0 and denom > 0 else np.nan
+        expected_frame = pd.DataFrame(
+            expected, index=table.index, columns=table.columns
+        )
+        low_expected = int((expected < 5).sum())
+        if (expected < 1).any() or low_expected / expected.size > 0.2:
+            warnings.append(
+                f"{low_expected} of {expected.size} expected cell counts are below 5 or at least one is below 1; the chi-square approximation may be unreliable."
+            )
+        result.update({
+            "n": n, "statistic": float(chi2), "p_value": float(p_value),
+            "degrees_of_freedom": int(dof),
+            "effect_size_name": "Cramer's V", "effect_size": float(cramer_v),
+            "contingency": table, "expected_frequencies": expected_frame,
+            "comparison": "The two categorical variables are associated",
+            "confidence_interval_label": None,
+        })
+        warnings.append("The chi-square test assumes independent observations and mutually exclusive categories; sparse expected counts can invalidate the approximation.")
+
+    result["significant_at_alpha"] = bool(
+        np.isfinite(result["p_value"]) and result["p_value"] < alpha
+    )
+    result["interpretation"] = (
+        "The result is statistically significant at the selected alpha level."
+        if result["significant_at_alpha"]
+        else "The result is not statistically significant at the selected alpha level."
+    )
+    result["limitations"] = [
+        "Statistical significance does not measure practical importance; interpret the effect size and confidence interval where available.",
+        "A p-value does not establish causation or the probability that the null hypothesis is true.",
+        "The validity of inference depends on study design, sampling, measurement quality and independent observations.",
+        "Multiple testing increases false-positive risk; adjust the analysis plan when many hypotheses are tested.",
+    ]
+    return result
