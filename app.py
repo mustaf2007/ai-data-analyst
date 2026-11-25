@@ -31,6 +31,8 @@ def initialise_state():
         "upload_signature": None,
         "model_result": None,
         "anomalies": None,
+        "model_config": None,
+        "anomaly_config": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -40,6 +42,8 @@ def initialise_state():
 def clear_derived_results():
     st.session_state.model_result = None
     st.session_state.anomalies = None
+    st.session_state.model_config = None
+    st.session_state.anomaly_config = None
 
 
 def set_dataset(data, source, upload_signature=None):
@@ -57,12 +61,13 @@ initialise_state()
 with st.sidebar:
     st.header("Workspace")
     upload = st.file_uploader("Upload dataset", type=["csv", "xlsx"])
+    reload_upload = st.button("Load selected file", use_container_width=True) if upload is not None else False
     if upload is not None:
         content = upload.getvalue()
         signature = hashlib.sha256(upload.name.encode("utf-8") + b"\0" + content).hexdigest()
         # Streamlit reruns the script after most interactions. Only load a given
-        # upload once; otherwise cleaning and navigation can be silently undone.
-        if signature != st.session_state.upload_signature:
+        # upload once unless the user explicitly asks to load it again.
+        if signature != st.session_state.upload_signature or reload_upload:
             try:
                 uploaded_df = load_dataset(upload.name, content)
                 set_dataset(uploaded_df, upload.name, signature)
@@ -205,6 +210,10 @@ with tabs[5]:
     target = st.selectbox("Target variable", df.columns.tolist())
     task = st.selectbox("Task", ["Auto-detect", "Regression", "Classification"])
     test_share = st.slider("Test set share", .1, .4, .2, .05)
+    model_config = (target, task, float(test_share))
+    if st.session_state.model_config is not None and st.session_state.model_config != model_config:
+        st.session_state.model_result = None
+    st.session_state.model_config = model_config
     if st.button("Train baseline model"):
         try:
             st.session_state.model_result = train_predictive_model(df, target, task, test_share)
@@ -228,6 +237,10 @@ with tabs[5]:
 
 with tabs[6]:
     contamination = st.slider("Expected anomaly share", .01, .20, .05, .01)
+    anomaly_config = float(contamination)
+    if st.session_state.anomaly_config is not None and st.session_state.anomaly_config != anomaly_config:
+        st.session_state.anomalies = None
+    st.session_state.anomaly_config = anomaly_config
     if st.button("Detect anomalies"):
         try:
             st.session_state.anomalies = detect_anomalies(df, contamination)
