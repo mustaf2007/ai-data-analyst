@@ -408,3 +408,53 @@ def build_cleaning_report(before, after, *, drop_duplicates=False,
         "strategy": missing_strategy,
         "selected_columns": list(selected),
     }
+
+
+def build_data_story(findings, *, title="Data analysis brief", audience="General", context=""):
+    """Turn selected structured findings into a cautious, evidence-linked narrative."""
+    if findings is None:
+        findings = []
+    records = findings.to_dict("records") if isinstance(findings, pd.DataFrame) else list(findings)
+    records = [
+        item for item in records
+        if isinstance(item, dict) and item.get("finding")
+    ]
+    if not records:
+        return f"{title.strip() or 'Data analysis brief'}\n\nNo supported findings were selected. Generate insights or select findings before drafting."
+
+    groups = {}
+    for item in records:
+        groups.setdefault(str(item.get("area", "Other")), []).append(item)
+
+    lines = [
+        (title.strip() or "Data analysis brief"),
+        f"Audience: {audience.strip() or 'General'}",
+        "",
+        "Purpose and scope",
+        context.strip() or "This brief summarizes descriptive observations generated from the active dataset. It does not establish causal relationships.",
+        "",
+        "Key findings",
+    ]
+    for area, items in groups.items():
+        lines.extend(["", area])
+        for item in items:
+            lines.append(f"- {str(item['finding']).strip()}")
+            evidence = str(item.get("evidence", "")).strip()
+            caveat = str(item.get("caveat", "")).strip()
+            if evidence:
+                lines.append(f"  Evidence: {evidence}")
+            if caveat:
+                lines.append(f"  Interpretation note: {caveat}")
+
+    lines.extend([
+        "",
+        "Interpretation and limitations",
+        "These findings are descriptive and depend on the coverage, definitions, units, sampling and quality of the supplied data. Correlation does not demonstrate causation. Check missingness, outliers and subgroup sizes before drawing conclusions.",
+        "",
+        "Recommended next steps",
+        "1. Verify source definitions, time coverage, units and the observational unit.",
+        "2. Investigate data-quality issues and document any cleaning decisions.",
+        "3. Test important patterns with an appropriate statistical method and domain knowledge.",
+        "4. Compare results with independent sources before using them to guide policy or operational decisions.",
+    ])
+    return "\n".join(lines)
