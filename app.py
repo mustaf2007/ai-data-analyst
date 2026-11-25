@@ -129,6 +129,7 @@ def initialise_state():
         "chart_exports": {},
         "report_artifacts": None,
         "chat_history": [],
+        "chat_context": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -151,6 +152,7 @@ def set_dataset(data, source, upload_signature=None):
     st.session_state.chart_exports = {}
     st.session_state.report_artifacts = None
     st.session_state.chat_history = []
+    st.session_state.chat_context = None
     if upload_signature is not None:
         st.session_state.upload_signature = upload_signature
     clear_derived_results()
@@ -1336,7 +1338,8 @@ with tabs[16]:
     prompt = st.chat_input("Ask a question about your active dataset…", key="dataset_chat_input")
     if prompt:
         st.session_state.chat_history.append({"role": "user", "content": prompt})
-        result = answer_dataset_question(df, prompt)
+        result = answer_dataset_question(df, prompt, context=st.session_state.chat_context)
+        st.session_state.chat_context = result.get("context", st.session_state.chat_context)
         st.session_state.chat_history.append({
             "role": "assistant", "content": result["answer"],
             "evidence": result.get("evidence"),
