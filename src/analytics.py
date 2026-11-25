@@ -563,3 +563,61 @@ def build_time_series_analysis(
         "unusual_periods": int(output["unusual_change"].sum()),
     }
     return {"data": output, "summary": summary, "warnings": warnings}
+
+
+
+def forecast_time_series_baseline(series, *, horizon=3, holdout_periods=None):
+    """Evaluate a last-observation baseline on a chronological holdout, then forecast."""
+    values = pd.to_numeric(pd.Series(series), errors="coerce")
+    values = values.replace([np.inf, -np.inf], np.nan).dropna().astype(float).reset_index(drop=True)
+    if not isinstance(horizon, (int, np.integer)) or not 1 <= horizon <= 12:
+        raise ValueError("Forecast horizon must be an integer from 1 to 12.")
+    if len(values) < 8:
+        raise ValueError("At least eight observed periods are required for baseline forecasting.")
+
+    if holdout_periods is None:
+        holdout_periods = max(2, int(np.ceil(len(values) * 0.2)))
+    if not isinstance(holdout_periods, (int, np.integer)) or holdout_periods < 1:
+        raise ValueError("Holdout periods must be a positive integer.")
+    if len(values) - holdout_periods < 3:
+        raise ValueError("The chronological training sample must contain at least three periods.")
+
+    split = len(values) - holdout_periods
+    train = values.iloc[:split]
+    actual = values.iloc[split:]
+    validation_prediction = float(train.iloc[-1])
+    errors = actual.to_numpy() - validation_prediction
+    mae = float(np.mean(np.abs(errors)))
+    denominator = np.abs(actual.to_numpy()) + abs(validation_prediction)
+    smape_terms = np.divide(
+        2 * np.abs(errors), denominator,
+        out=np.zeros_like(errors, dtype=float), where=denominator != 0,
+    )
+    smape = float(np.mean(smape_terms) * 100)
+
+    future = pd.DataFrame({
+        "step_ahead": np.arange(1, horizon + 1, dtype=int),
+        "forecast": np.repeat(float(values.iloc[-1]), horizon),
+        "method": "Last-observation baseline",
+    })
+    validation = pd.DataFrame({
+        "step": np.arange(1, len(actual) + 1, dtype=int),
+        "actual": actual.to_numpy(),
+        "predicted": np.repeat(validation_prediction, len(actual)),
+    })
+    return {
+        "forecast": future,
+        "validation": validation,
+        "metrics": {
+            "training_periods": int(len(train)),
+            "holdout_periods": int(len(actual)),
+            "mae": mae,
+            "smape_pct": smape,
+        },
+        "limitations": [
+            "This is a last-observation baseline, not a fitted forecasting model.",
+            "The forecast assumes the latest observed value remains constant.",
+            "The holdout evaluates one historical window and may not represent future conditions.",
+            "Seasonality, structural breaks and external drivers are not modeled.",
+        ],
+    }
