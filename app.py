@@ -12,7 +12,7 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from analytics import (
-    DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset,
+    DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset, build_time_series_analysis,
     numeric_summary, categorical_summary, correlation_matrix, grouped_summary,
     infer_datetime_columns, generate_insights, generate_detailed_insights, build_data_story, safe_csv_bytes, build_cleaning_report, validate_analysis_readiness, column_quality_diagnostics,
 )
@@ -227,7 +227,7 @@ st.markdown(
 )
 tabs = st.tabs([
     "Dashboard", "Data quality", "Clean data", "Explore", "Relationships",
-    "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights", "Data story",
+    "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights", "Data story", "Time-series intelligence",
 ])
 
 with tabs[0]:
@@ -816,3 +816,96 @@ with tabs[10]:
         )
     else:
         st.info("Upload or load a dataset with usable observations to generate a data story.")
+
+
+
+with tabs[11]:
+    st.subheader("Time-Series Intelligence")
+    st.caption("Aggregate observations over time, compare periods, inspect moving averages and identify unusual changes.")
+    inferred_dates = infer_datetime_columns(df)
+    date_candidates = list(dict.fromkeys(
+        inferred_dates + [
+            c for c in df.columns
+            if str(c).strip().lower() in {"year", "yr", "yyyy", "month", "date", "period"}
+        ]
+    ))
+    numeric_candidates = df.select_dtypes(include=np.number).columns.tolist()
+    if not date_candidates:
+        st.info("No date/time column was identified. Add a recognizable date column (or a numeric Year column) to use this workspace.")
+    elif not numeric_candidates:
+        st.info("No numeric measure is available. Convert the indicator column to numeric values before analysis.")
+    else:
+        controls = st.columns(4)
+        date_col = controls[0].selectbox("Date / period", date_candidates, key="ts_date_column")
+        value_col = controls[1].selectbox("Numeric measure", numeric_candidates, key="ts_value_column")
+        frequency_label = controls[2].selectbox("Period frequency", ["Month", "Quarter", "Year"], key="ts_frequency")
+        aggregation = controls[3].selectbox("Aggregation", ["sum", "mean", "median", "count"], key="ts_aggregation")
+        window = st.slider("Moving-average window (periods)", 2, 12, 3, key="ts_ma_window")
+        freq_code = {"Month": "MS", "Quarter": "QS", "Year": "YS"}[frequency_label]
+        try:
+            ts_result = build_time_series_analysis(
+                df, date_col, value_col, frequency=freq_code,
+                aggregation=aggregation, moving_average_window=window,
+            )
+            ts_data = ts_result["data"]
+            summary = ts_result["summary"]
+            metrics = st.columns(4)
+            metrics[0].metric("Periods", f"{summary['periods']:,}")
+            metrics[1].metric("Valid observations", f"{summary['observations']:,}")
+            metrics[2].metric("Trend direction", summary["trend_direction"])
+            metrics[3].metric("Unusual changes", summary["unusual_periods"])
+            st.caption(
+                f"Aggregation: {aggregation} · Frequency: {frequency_label.lower()} · "
+                f"Linear slope: {summary['trend_slope_per_period']:.4g} measure units per period"
+            )
+
+            trend_fig = px.line(
+                ts_data, x="period", y="value", markers=True,
+                title=f"{value_col} over time ({frequency_label.lower()}ly {aggregation})",
+            )
+            trend_fig.add_scatter(
+                x=ts_data["period"], y=ts_data["moving_average"],
+                mode="lines", name=f"{window}-period moving average",
+            )
+            trend_fig.add_scatter(
+                x=ts_data["period"], y=ts_data["trend_line"],
+                mode="lines", name="Linear trend (descriptive)",
+                line=dict(dash="dash"),
+            )
+            unusual = ts_data[ts_data["unusual_change"]]
+            if not unusual.empty:
+                trend_fig.add_scatter(
+                    x=unusual["period"], y=unusual["value"],
+                    mode="markers", name="Unusual period change",
+                    marker=dict(size=11, symbol="diamond"),
+                )
+            style_chart(trend_fig, theme_template)
+            st.plotly_chart(trend_fig, use_container_width=True)
+            render_chart_downloads(trend_fig, "time_series_intelligence")
+
+            st.markdown("#### Period-by-period analysis")
+            display_data = ts_data.copy()
+            display_data["period"] = display_data["period"].dt.strftime("%Y-%m-%d")
+            st.dataframe(display_data, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Download time-series results (CSV)",
+                data=safe_csv_bytes(display_data),
+                file_name="time_series_analysis.csv", mime="text/csv",
+                key="download_time_series_csv",
+            )
+            st.download_button(
+                "Download time-series results (Excel)",
+                data=excel_bytes(display_data),
+                file_name="time_series_analysis.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="download_time_series_excel",
+            )
+            for warning in ts_result["warnings"]:
+                st.warning(warning)
+            st.caption(
+                "Interpretation limits: trends are descriptive, not causal. Unusual-change flags use an "
+                "IQR rule and are prompts for investigation, not proof of errors. Check date coverage, "
+                "units, missing periods, seasonality and the meaning of the selected aggregation."
+            )
+        except (ValueError, TypeError) as exc:
+            st.warning(f"Time-series analysis could not be completed: {exc}")
