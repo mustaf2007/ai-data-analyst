@@ -12,7 +12,7 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from analytics import (
-    DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset, build_time_series_analysis, forecast_time_series_baseline,
+    DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset, build_time_series_analysis, forecast_time_series_baseline, compare_datasets,
     numeric_summary, categorical_summary, correlation_matrix, grouped_summary,
     infer_datetime_columns, generate_insights, generate_detailed_insights, build_data_story, safe_csv_bytes, build_cleaning_report, validate_analysis_readiness, column_quality_diagnostics,
 )
@@ -227,7 +227,7 @@ st.markdown(
 )
 tabs = st.tabs([
     "Dashboard", "Data quality", "Clean data", "Explore", "Relationships",
-    "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights", "Data story", "Time-series intelligence",
+    "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights", "Data story", "Time-series intelligence", "Dataset comparison",
 ])
 
 with tabs[0]:
@@ -936,3 +936,95 @@ with tabs[11]:
             )
         except (ValueError, TypeError) as exc:
             st.warning(f"Time-series analysis could not be completed: {exc}")
+
+
+
+with tabs[12]:
+    st.subheader("Dataset Comparison & Benchmarking")
+    st.caption(
+        "Compare the active working dataset with a second CSV/XLSX file. "
+        "The comparison file is kept separate and never replaces your active dataset."
+    )
+    comparison_upload = st.file_uploader(
+        "Upload comparison dataset", type=["csv", "xlsx"], key="comparison_file_upload"
+    )
+    if comparison_upload is None:
+        st.info("Upload a second dataset to compare its coverage, schema, numeric indicators and categorical distributions with the active dataset.")
+        st.caption("The active dataset is the reference. The uploaded file is the comparison dataset.")
+    else:
+        comparison_bytes = comparison_upload.getvalue()
+        comparison_signature = hashlib.sha256(
+            comparison_upload.name.encode("utf-8") + b"\\0" + comparison_bytes
+        ).hexdigest()
+        if st.session_state.get("comparison_signature") != comparison_signature:
+            st.session_state.comparison_signature = comparison_signature
+            st.session_state.comparison_result = None
+        st.caption(f"Reference: {st.session_state.source} · Comparison: {comparison_upload.name}")
+        if st.button("Run dataset comparison", type="primary", key="run_dataset_comparison"):
+            try:
+                comparison_df = load_dataset(comparison_upload.name, comparison_bytes)
+                st.session_state.comparison_result = compare_datasets(df, comparison_df)
+            except (DataInputError, ValueError, TypeError) as exc:
+                st.session_state.comparison_result = None
+                st.error(f"Comparison could not be completed: {exc}")
+
+        comparison_result = st.session_state.get("comparison_result")
+        if comparison_result is not None:
+            result = comparison_result
+            overview = result["summary"]
+            overview_cols = st.columns(2)
+            for index, row in overview.iterrows():
+                overview_cols[index].markdown(f"**{row['dataset']} dataset**")
+                overview_cols[index].metric("Rows", f"{row['rows']:,}")
+                overview_cols[index].metric("Columns", f"{row['columns']:,}")
+                overview_cols[index].metric("Missing cells", f"{row['missing_cells']:,}")
+                overview_cols[index].metric("Duplicate rows", f"{row['duplicate_rows']:,}")
+                overview_cols[index].caption(f"Missingness: {row['missing_pct']:.2f}%")
+
+            st.markdown("#### Schema comparison")
+            st.dataframe(result["schema"], use_container_width=True, hide_index=True)
+            if not result["numeric"].empty:
+                st.markdown("#### Numeric indicator comparison")
+                st.dataframe(result["numeric"], use_container_width=True, hide_index=True)
+                st.caption("Mean differences are comparison minus reference. Percentage differences use the absolute reference mean and are unavailable when that mean is zero.")
+            else:
+                st.info("No shared numeric columns were available for numeric summary comparison.")
+            if not result["categorical"].empty:
+                st.markdown("#### Categorical distribution comparison")
+                st.dataframe(result["categorical"], use_container_width=True, hide_index=True)
+                st.caption("Distribution differences are expressed in percentage points, not percent change.")
+            else:
+                st.info("No shared low-cardinality categorical columns were available for distribution comparison.")
+
+            for warning in result["warnings"]:
+                st.warning(warning)
+            with st.expander("Interpretation limits", expanded=False):
+                for limitation in result["limitations"]:
+                    st.write("• " + limitation)
+
+            workbook = io.BytesIO()
+            with pd.ExcelWriter(workbook, engine="openpyxl") as writer:
+                result["summary"].to_excel(writer, index=False, sheet_name="Overview")
+                result["schema"].to_excel(writer, index=False, sheet_name="Schema")
+                result["numeric"].to_excel(writer, index=False, sheet_name="Numeric comparison")
+                result["categorical"].to_excel(writer, index=False, sheet_name="Category comparison")
+                pd.DataFrame({"warning": result["warnings"]}).to_excel(
+                    writer, index=False, sheet_name="Warnings"
+                )
+            export_cols = st.columns(2)
+            export_cols[0].download_button(
+                "Download comparison workbook (Excel)", workbook.getvalue(),
+                "dataset_comparison.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="download_dataset_comparison_excel",
+            )
+            export_cols[1].download_button(
+                "Download numeric comparison (CSV)",
+                safe_csv_bytes(result["numeric"]), "numeric_comparison.csv",
+                "text/csv", key="download_dataset_comparison_numeric",
+            )
+            st.download_button(
+                "Download categorical comparison (CSV)",
+                safe_csv_bytes(result["categorical"]), "categorical_comparison.csv",
+                "text/csv", key="download_dataset_comparison_categorical",
+            )
