@@ -32,8 +32,44 @@ def excel_bytes(dataframe):
     return output.getvalue()
 
 
+def excel_analysis_bytes(dataframe, profile, numeric, cleaning_report=None,
+                         anomalies=None, model_result=None):
+    """Build a multi-sheet workbook containing the active data and analysis outputs."""
+    output = io.BytesIO()
+    overview_keys = ["rows", "columns", "missing_cells", "missing_pct",
+                     "duplicate_rows", "quality_score"]
+    overview = pd.DataFrame(
+        [{"metric": key.replace("_", " ").title(), "value": profile.get(key)}
+         for key in overview_keys]
+    )
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        dataframe.to_excel(writer, index=False, sheet_name="Analysis data")
+        overview.to_excel(writer, index=False, sheet_name="Dataset overview")
+        numeric.to_excel(writer, sheet_name="Numeric summary")
+        corr = correlation_matrix(dataframe, "pearson")
+        if not corr.empty:
+            corr.to_excel(writer, sheet_name="Correlation")
+        if cleaning_report is not None:
+            cleaning_report["per_column"].to_excel(
+                writer, index=False, sheet_name="Cleaning audit"
+            )
+        if anomalies is not None:
+            anomalies.to_excel(writer, index=False, sheet_name="Anomalies")
+        if model_result:
+            pd.DataFrame(
+                [{"metric": key, "value": value}
+                 for key, value in model_result.get("metrics", {}).items()]
+            ).to_excel(writer, index=False, sheet_name="Model metrics")
+    return output.getvalue()
+
+
 def render_chart_downloads(fig, key):
     """Offer an interactive HTML export and on-demand static chart exports."""
+    signature = hashlib.sha256(fig.to_json().encode("utf-8")).hexdigest()
+    exports = st.session_state.chart_exports.get(key)
+    if exports and exports.get("signature") != signature:
+        st.session_state.chart_exports.pop(key, None)
+        exports = None
     st.download_button(
         "Download interactive chart (HTML)",
         data=fig.to_html(full_html=True, include_plotlyjs=True),
@@ -44,18 +80,19 @@ def render_chart_downloads(fig, key):
     if st.button("Prepare PNG and SVG downloads", key=f"{key}_prepare_static"):
         try:
             st.session_state.chart_exports[key] = {
+                "signature": signature,
                 "png": fig.to_image(format="png", scale=2),
                 "svg": fig.to_image(format="svg"),
             }
             st.success("Static chart files are ready.")
+            exports = st.session_state.chart_exports[key]
         except Exception as exc:
             st.warning(
                 "Static export is unavailable in this environment. "
                 "The interactive HTML download is still available. "
                 f"Export detail: {exc}"
             )
-    exports = st.session_state.chart_exports.get(key, {})
-    if exports:
+    if exports and exports.get("signature") == signature:
         png_col, svg_col = st.columns(2)
         png_col.download_button(
             "Download PNG (2× resolution)", data=exports["png"],
@@ -89,6 +126,7 @@ def initialise_state():
         "anomaly_config": None,
         "cleaning_report": None,
         "chart_exports": {},
+        "report_artifacts": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -108,6 +146,8 @@ def set_dataset(data, source, upload_signature=None):
     st.session_state.active = data.copy(deep=True)
     st.session_state.source = source
     st.session_state.cleaning_report = None
+    st.session_state.chart_exports = {}
+    st.session_state.report_artifacts = None
     if upload_signature is not None:
         st.session_state.upload_signature = upload_signature
     clear_derived_results()
@@ -502,35 +542,149 @@ with tabs[6]:
     st.caption("Anomaly flags are screening signals, not proof of errors or fraud.")
 
 with tabs[7]:
-    st.markdown("#### Dataset downloads")
-    if st.session_state.cleaning_report is not None:
-        st.download_button(
-            "Download cleaned dataset (CSV)", safe_csv_bytes(df),
-            "cleaned_dataset.csv", "text/csv",
-            key="download_cleaned_dataset_export",
+    st.subheader("Analysis Report Builder")
+    st.caption(
+        "Create a tailored PDF report and a multi-sheet Excel workbook from the active dataset. "
+        "Add your interpretation and choose which analysis outputs to include."
+    )
+    numeric_report_columns = df.select_dtypes(include=np.number).columns.tolist()
+    all_report_columns = df.columns.tolist()
+    report_sections = [
+        "Dataset overview", "Key findings", "Numeric summary", "Correlation matrix",
+        "Cleaning audit", "Anomaly results", "Predictive model results", "Dataset sample",
+    ]
+    with st.form("analysis_report_builder"):
+        report_title = st.text_input(
+            "Report title", value="Data Analysis Report",
+            help="Use a clear title suitable for sharing with colleagues or decision-makers.",
         )
-    else:
-        st.info("No cleaning has been applied yet. The active dataset is available below.")
-    st.download_button(
+        prepared_by = st.text_input("Prepared by / organization (optional)")
+        executive_summary = st.text_area(
+            "Executive summary (optional)",
+            placeholder="Summarize the purpose, main results and implications...",
+            height=110,
+        )
+        methodology = st.text_area(
+            "Methodology and limitations (optional)",
+            placeholder="Describe data sources, definitions, methods, assumptions and limitations...",
+            height=110,
+        )
+        selected_sections = st.multiselect(
+            "Include report sections", report_sections,
+            default=["Dataset overview", "Key findings", "Numeric summary",
+                     "Correlation matrix", "Dataset sample"],
+        )
+        include_report_chart = st.checkbox(
+            "Include one chart in the PDF", value=bool(numeric_report_columns),
+            disabled=not bool(numeric_report_columns),
+        )
+        if all_report_columns:
+            chart_controls = st.columns(3)
+            report_chart_type = chart_controls[0].selectbox(
+                "Report chart type", ["Line", "Bar", "Scatter", "Histogram"]
+            )
+            report_chart_x = chart_controls[1].selectbox(
+                "Chart X variable", all_report_columns
+            )
+            report_y_options = numeric_report_columns or all_report_columns
+            report_chart_y = chart_controls[2].selectbox(
+                "Chart Y variable", report_y_options,
+                disabled=report_chart_type == "Histogram",
+            )
+        else:
+            report_chart_type, report_chart_x, report_chart_y = "Histogram", None, None
+        build_report = st.form_submit_button("Generate PDF and Excel report", type="primary")
+
+    if build_report:
+        chart_images = []
+        chart_warning = None
+        if include_report_chart and report_chart_x is not None:
+            try:
+                if report_chart_type == "Line":
+                    report_fig = px.line(df, x=report_chart_x, y=report_chart_y,
+                                         markers=True, title=report_title)
+                elif report_chart_type == "Bar":
+                    report_fig = px.bar(df, x=report_chart_x, y=report_chart_y,
+                                        title=report_title)
+                elif report_chart_type == "Scatter":
+                    report_fig = px.scatter(df, x=report_chart_x, y=report_chart_y,
+                                            title=report_title)
+                else:
+                    report_fig = px.histogram(df, x=report_chart_x, marginal="box",
+                                              title=report_title)
+                style_chart(report_fig, theme_template)
+                chart_images.append((report_title, report_fig.to_image(format="png", scale=1.5)))
+            except Exception as exc:
+                chart_warning = (
+                    "The PDF will be generated without the chart because static chart "
+                    f"rendering was unavailable: {exc}"
+                )
+
+        try:
+            report_pdf = build_pdf_report(
+                st.session_state.source, df, p, numeric_summary(df),
+                generate_insights(df),
+                report_title=report_title,
+                prepared_by=prepared_by,
+                executive_summary=executive_summary,
+                methodology=methodology,
+                sections=selected_sections,
+                cleaning_report=st.session_state.cleaning_report,
+                anomalies=st.session_state.anomalies,
+                model_result=st.session_state.model_result,
+                chart_images=chart_images,
+            )
+            report_xlsx = excel_analysis_bytes(
+                df, p, numeric_summary(df),
+                cleaning_report=st.session_state.cleaning_report,
+                anomalies=st.session_state.anomalies,
+                model_result=st.session_state.model_result,
+            )
+            st.session_state.report_artifacts = {
+                "pdf": report_pdf, "xlsx": report_xlsx,
+                "title": report_title or "analysis_report",
+            }
+            st.success("Your report files are ready.")
+            if chart_warning:
+                st.warning(chart_warning)
+        except Exception as exc:
+            st.error(f"Report generation failed: {exc}")
+
+    artifacts = st.session_state.report_artifacts
+    if artifacts:
+        safe_name = "".join(
+            ch.lower() if ch.isalnum() else "_" for ch in artifacts["title"]
+        ).strip("_") or "analysis_report"
+        pdf_col, excel_col = st.columns(2)
+        pdf_col.download_button(
+            "Download professional PDF report",
+            data=artifacts["pdf"], file_name=f"{safe_name}.pdf",
+            mime="application/pdf", key="download_built_pdf_report",
+            use_container_width=True,
+        )
+        excel_col.download_button(
+            "Download analysis workbook (Excel)",
+            data=artifacts["xlsx"], file_name=f"{safe_name}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_built_excel_report", use_container_width=True,
+        )
+        st.caption(
+            "The Excel workbook contains the active dataset, dataset overview, numeric "
+            "summary and available correlation, cleaning, anomaly and model outputs."
+        )
+
+    st.divider()
+    st.markdown("#### Quick dataset exports")
+    download_col1, download_col2 = st.columns(2)
+    download_col1.download_button(
         "Download active dataset (CSV)", safe_csv_bytes(df),
         "analysis_dataset.csv", "text/csv",
     )
-    st.download_button(
+    download_col2.download_button(
         "Download active dataset (Excel)", data=excel_bytes(df),
         file_name="analysis_dataset.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-    try:
-        pdf = build_pdf_report(
-            st.session_state.source, df, p, numeric_summary(df), generate_insights(df)
-        )
-        st.download_button(
-            "Download PDF summary", pdf, "data_analysis_report.pdf", "application/pdf"
-        )
-    except Exception as exc:
-        st.error(f"PDF report could not be generated: {exc}")
-    st.caption("PDF includes dataset metrics, observations and numeric summary; it does not embed charts.")
-    st.info("Use Chart Studio to build and export individual charts. Interactive HTML is available directly; PNG/SVG exports are prepared on demand.")
 
 with tabs[8]:
     st.subheader("Chart Studio")
