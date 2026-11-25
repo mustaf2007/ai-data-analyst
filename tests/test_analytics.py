@@ -3,6 +3,7 @@ import pytest
 from analytics import (
     DataInputError, clean_dataset, load_dataset, profile_dataset, safe_csv_bytes,
     categorical_summary, correlation_matrix, grouped_summary, infer_datetime_columns,
+    build_cleaning_report,
 )
 
 
@@ -71,3 +72,40 @@ def test_csv_formula_neutralization():
     raw = safe_csv_bytes(pd.DataFrame({"text": ["=1+1", "safe", "@SUM(A1:A2)"]})).decode("utf-8-sig")
     assert "'=1+1" in raw
     assert "'@SUM(A1:A2)" in raw
+
+
+
+def test_cleaning_report_counts_filled_cells_and_duplicates():
+    df = pd.DataFrame({
+        "number": [1.0, None, 1.0, 3.0],
+        "category": ["a", "b", "a", None],
+    })
+    cleaned = clean_dataset(
+        df, drop_duplicates=True, missing_strategy="Fill numeric with median"
+    )
+    report = build_cleaning_report(
+        df, cleaned, drop_duplicates=True,
+        missing_strategy="Fill numeric with median",
+    )
+    assert report["rows_before"] == 4
+    assert report["rows_after"] == 3
+    assert report["duplicates_removed"] == 1
+    assert report["missing_filled"] == 1
+    assert report["missing_before"] == 2
+    assert report["missing_after"] == 1
+    assert report["per_column"].loc[
+        report["per_column"]["column"] == "number", "missing_after"
+    ].iloc[0] == 0
+
+
+def test_cleaning_report_counts_rows_removed_for_missing():
+    df = pd.DataFrame({"x": [1, None, 3], "y": ["a", "b", None]})
+    cleaned = clean_dataset(
+        df, missing_strategy="Drop rows with missing values", selected_columns=["x"]
+    )
+    report = build_cleaning_report(
+        df, cleaned, missing_strategy="Drop rows with missing values",
+        selected_columns=["x"],
+    )
+    assert report["rows_removed_for_missing"] == 1
+    assert report["rows_after"] == 2
