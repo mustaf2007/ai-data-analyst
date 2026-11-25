@@ -758,3 +758,79 @@ def compare_datasets(reference, comparison, *, categorical_limit=30):
             "Summary differences are descriptive and do not establish causes or statistical significance.",
         ],
     }
+
+
+
+def build_geographic_summary(
+    df, geographic_column, measure_column, *, aggregation="sum", top_n=25
+):
+    """Aggregate a numeric measure by a user-selected geographic/category field."""
+    if not isinstance(df, pd.DataFrame):
+        raise ValueError("Input must be a pandas DataFrame.")
+    if df.empty:
+        raise ValueError("The dataset must contain at least one data row.")
+    if geographic_column not in df.columns or measure_column not in df.columns:
+        raise ValueError("Selected geographic and measure columns must exist.")
+    if geographic_column == measure_column:
+        raise ValueError("Choose different columns for geography and measure.")
+    if aggregation not in {"sum", "mean", "median", "min", "max"}:
+        raise ValueError("Aggregation must be sum, mean, median, min or max.")
+    if not isinstance(top_n, int) or top_n < 1:
+        raise ValueError("Top N must be a positive integer.")
+
+    work = df[[geographic_column, measure_column]].copy()
+    work["_geography"] = work[geographic_column].astype("string").str.strip()
+    work["_measure"] = pd.to_numeric(work[measure_column], errors="coerce")
+    work["_measure"] = work["_measure"].replace([np.inf, -np.inf], np.nan)
+    missing_geo = work["_geography"].isna() | work["_geography"].eq("")
+    invalid_measure = work["_measure"].isna()
+    valid = work.loc[~missing_geo & ~invalid_measure, ["_geography", "_measure"]]
+    if valid.empty:
+        raise ValueError("No rows contain both a valid geographic label and a finite numeric measure.")
+
+    grouped = valid.groupby("_geography", dropna=True)["_measure"]
+    result = grouped.agg(aggregation).reset_index()
+    result.columns = ["geography", "value"]
+    counts = valid.groupby("_geography")["_measure"].size().rename("observations")
+    result = result.merge(counts, on="geography", how="left")
+    result = result.sort_values("value", ascending=False, kind="stable").reset_index(drop=True)
+    result["rank"] = np.arange(1, len(result) + 1)
+    total = float(result["value"].sum())
+    if aggregation == "sum" and total > 0 and (result["value"] >= 0).all():
+        result["share_pct"] = result["value"] / total * 100
+    else:
+        result["share_pct"] = np.nan
+
+    warnings = []
+    if missing_geo.any():
+        warnings.append(f"{int(missing_geo.sum())} rows were excluded because the geographic label was missing or blank.")
+    if invalid_measure.any():
+        warnings.append(f"{int(invalid_measure.sum())} rows were excluded because the selected measure was missing or non-finite.")
+    if result["geography"].nunique() == 1:
+        warnings.append("Only one geographic group is represented; a regional ranking is not meaningful.")
+    if aggregation == "sum" and not result["value"].ge(0).all():
+        warnings.append("Share percentages are omitted because one or more aggregated values are negative.")
+    elif aggregation == "sum" and total <= 0:
+        warnings.append("Share percentages are omitted because the aggregate total is zero or negative.")
+
+    return {
+        "data": result.head(top_n).reset_index(drop=True),
+        "all_data": result,
+        "coverage": {
+            "input_rows": int(len(df)),
+            "included_rows": int(len(valid)),
+            "excluded_rows": int(len(df) - len(valid)),
+            "geographic_groups": int(result["geography"].nunique()),
+            "measure": str(measure_column),
+            "geographic_field": str(geographic_column),
+            "aggregation": aggregation,
+        },
+        "warnings": warnings,
+        "limitations": [
+            "The selected column is treated as a geographic label; the function does not verify official country, region, district or boundary codes.",
+            "Different geographic levels should not be mixed in one comparison.",
+            "Results depend on the selected aggregation, units, time period, coverage and underlying observation grain.",
+            "A ranking is descriptive and does not explain why geographic values differ.",
+            "Map visualization requires valid geographic identifiers or coordinates; names alone may be ambiguous.",
+        ],
+    }
