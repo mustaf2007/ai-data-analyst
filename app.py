@@ -12,7 +12,7 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from analytics import (
-    DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset, build_time_series_analysis, forecast_time_series_baseline, compare_datasets, build_geographic_summary,
+    DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset, build_time_series_analysis, forecast_time_series_baseline, compare_datasets, build_geographic_summary, run_statistical_test,
     numeric_summary, categorical_summary, correlation_matrix, grouped_summary,
     infer_datetime_columns, generate_insights, generate_detailed_insights, build_data_story, safe_csv_bytes, build_cleaning_report, validate_analysis_readiness, column_quality_diagnostics,
 )
@@ -227,7 +227,7 @@ st.markdown(
 )
 tabs = st.tabs([
     "Dashboard", "Data quality", "Clean data", "Explore", "Relationships",
-    "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights", "Data story", "Time-series intelligence", "Dataset comparison", "Geographic intelligence",
+    "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights", "Data story", "Time-series intelligence", "Dataset comparison", "Geographic intelligence", "Statistical testing",
 ])
 
 with tabs[0]:
@@ -1121,3 +1121,153 @@ with tabs[13]:
             )
         except ValueError as exc:
             st.warning(f"Geographic analysis could not be completed: {exc}")
+
+
+with tabs[14]:
+    st.subheader("Statistical Testing & Hypothesis Analysis")
+    st.caption(
+        "Run selected classical tests with effect sizes, confidence intervals where applicable, "
+        "sample summaries and assumption warnings."
+    )
+    numeric_test_columns = df.select_dtypes(include=np.number).columns.tolist()
+    categorical_test_columns = [
+        col for col in df.columns
+        if not pd.api.types.is_numeric_dtype(df[col])
+        and 1 < df[col].nunique(dropna=True) <= 100
+    ]
+    test_type = st.selectbox(
+        "Statistical test",
+        [
+            "One-sample t-test", "Independent-samples Welch t-test",
+            "One-way ANOVA", "Chi-square test of independence",
+        ],
+        key="stat_test_type",
+    )
+    if test_type == "Chi-square test of independence":
+        if len(categorical_test_columns) < 2:
+            st.info("At least two categorical columns with two or more categories are required.")
+        else:
+            stat_controls = st.columns(2)
+            stat_outcome = stat_controls[0].selectbox(
+                "First categorical variable", categorical_test_columns,
+                key="stat_chi_first",
+            )
+            second_options = [c for c in categorical_test_columns if c != stat_outcome]
+            stat_group = stat_controls[1].selectbox(
+                "Second categorical variable", second_options,
+                key="stat_chi_second",
+            )
+            stat_alpha = st.selectbox(
+                "Significance level (alpha)", [0.01, 0.05, 0.10],
+                index=1, key="stat_chi_alpha",
+            )
+            run_stat_button = st.button(
+                "Run chi-square test", type="primary", key="run_stat_chi"
+            )
+    elif not numeric_test_columns:
+        st.info("No numeric outcome columns are available for these tests.")
+    else:
+        stat_controls = st.columns(3)
+        stat_outcome = stat_controls[0].selectbox(
+            "Numeric outcome", numeric_test_columns, key="stat_numeric_outcome"
+        )
+        stat_group = None
+        if test_type in {"Independent-samples Welch t-test", "One-way ANOVA"}:
+            if not categorical_test_columns:
+                st.info("Add a categorical grouping column with at least two groups.")
+                stat_group = None
+            else:
+                stat_group = stat_controls[1].selectbox(
+                    "Grouping variable", categorical_test_columns,
+                    key="stat_group_column",
+                )
+        if test_type == "One-sample t-test":
+            hypothesized_mean = stat_controls[1].number_input(
+                "Hypothesized population mean", value=0.0,
+                key="stat_hypothesized_mean",
+            )
+        else:
+            hypothesized_mean = 0.0
+        stat_alpha = stat_controls[2 if test_type != "One-sample t-test" else 2].selectbox(
+            "Significance level (alpha)", [0.01, 0.05, 0.10],
+            index=1, key="stat_numeric_alpha",
+        )
+        run_stat_button = st.button(
+            "Run statistical test", type="primary", key="run_stat_numeric"
+        )
+    if "run_stat_button" in locals() and run_stat_button:
+        try:
+            stat_result = run_statistical_test(
+                df, test_type, stat_outcome, group_column=stat_group,
+                hypothesized_mean=hypothesized_mean if test_type == "One-sample t-test" else 0.0,
+                alpha=stat_alpha,
+            )
+            st.session_state.statistical_test_result = stat_result
+        except (ValueError, TypeError) as exc:
+            st.session_state.statistical_test_result = None
+            st.error(f"Statistical test could not be completed: {exc}")
+
+    stat_result = st.session_state.get("statistical_test_result")
+    if stat_result is not None:
+        st.markdown("#### Test results")
+        stat_metrics = st.columns(4)
+        stat_metrics[0].metric("Observations", f"{stat_result['n']:,}")
+        stat_metrics[1].metric("Test statistic", f"{stat_result['statistic']:.5g}")
+        stat_metrics[2].metric("p-value", f"{stat_result['p_value']:.5g}")
+        stat_metrics[3].metric(
+            stat_result["effect_size_name"] or "Effect size",
+            f"{stat_result['effect_size']:.4g}" if np.isfinite(stat_result["effect_size"]) else "Unavailable",
+        )
+        st.write("**Decision:** " + stat_result["interpretation"])
+        st.caption(
+            f"Degrees of freedom: {stat_result['degrees_of_freedom']} · "
+            f"Alpha: {stat_result['alpha']}"
+        )
+        if stat_result.get("confidence_interval") is not None:
+            low, high = stat_result["confidence_interval"]
+            st.write(
+                f"**{stat_result['confidence_interval_label']} ({1-stat_result['alpha']:.0%}):** "
+                f"{low:.5g} to {high:.5g}"
+            )
+        if not stat_result["group_summary"].empty:
+            st.markdown("#### Group summaries")
+            st.dataframe(stat_result["group_summary"], use_container_width=True, hide_index=True)
+        if not stat_result["contingency"].empty:
+            st.markdown("#### Observed contingency table")
+            st.dataframe(stat_result["contingency"], use_container_width=True)
+            st.markdown("#### Expected frequencies under independence")
+            st.dataframe(stat_result["expected_frequencies"], use_container_width=True)
+        for warning in stat_result["warnings"]:
+            st.warning(warning)
+        with st.expander("Methodology and interpretation limits", expanded=True):
+            for limitation in stat_result["limitations"]:
+                st.write("• " + limitation)
+        stat_export = pd.DataFrame([{
+            "test": stat_result["test"], "outcome": stat_result["outcome"],
+            "group": stat_result["group"], "n": stat_result["n"],
+            "statistic": stat_result["statistic"], "p_value": stat_result["p_value"],
+            "degrees_of_freedom": str(stat_result["degrees_of_freedom"]),
+            "alpha": stat_result["alpha"],
+            "significant_at_alpha": stat_result["significant_at_alpha"],
+            "effect_size_name": stat_result["effect_size_name"],
+            "effect_size": stat_result["effect_size"],
+            "confidence_interval": str(stat_result["confidence_interval"]),
+            "interpretation": stat_result["interpretation"],
+        }])
+        stat_exports = st.columns(2)
+        stat_exports[0].download_button(
+            "Download test summary (CSV)", safe_csv_bytes(stat_export),
+            "statistical_test_summary.csv", "text/csv",
+            key="download_stat_test_csv",
+        )
+        stat_exports[1].download_button(
+            "Download test summary (Excel)", excel_bytes(stat_export),
+            "statistical_test_summary.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_stat_test_excel",
+        )
+    st.caption(
+        "This workspace does not verify random sampling, study design, independence, "
+        "measurement validity or pre-registration. It does not perform post-hoc pairwise "
+        "tests or multiple-comparison correction."
+    )
