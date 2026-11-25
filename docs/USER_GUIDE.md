@@ -4,7 +4,7 @@
 2. Start with `streamlit run app.py`.
 3. Upload CSV/XLSX or load the built-in sample.
 4. Review the overview and column-level data quality profile.
-5. Apply optional cleaning to a working copy. The original uploaded dataset remains available through **Reset to original**.
+5. Apply optional cleaning to a working copy. After the operation, the Clean data tab automatically displays a result notification and before/after report: rows retained/removed, duplicates removed, rows removed for missing values, missing cells filled/remaining, per-column missingness, and the heuristic quality score change. Download the per-column cleaning report as CSV if needed. If the selected operation would remove every row, it is rejected and the active dataset is preserved. The original uploaded dataset remains available through **Reset to original**.
 6. Explore descriptive statistics, category frequencies, distributions, grouped summaries and date trends. Date trends let you select the aggregation method.
 7. Inspect numeric correlations using Pearson, Spearman or Kendall.
 8. Train a baseline regression/classification model or run Isolation Forest.
