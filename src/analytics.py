@@ -277,6 +277,80 @@ def generate_insights(df):
             p=pairs.abs().idxmax(); out.append(f"Strongest numeric correlation: {p[0]} and {p[1]} (r={c.loc[p[0],p[1]]:.2f}); association is not causation.")
     return out[:8]
 
+
+def generate_detailed_insights(df, max_findings=30):
+    """Create deterministic, evidence-backed observations without causal claims."""
+    findings = []
+    if df is None or df.empty:
+        return findings
+
+    rows, columns = df.shape
+    findings.append({
+        "area": "Dataset", "finding": f"The active dataset contains {rows:,} rows and {columns:,} columns.",
+        "evidence": f"{rows:,} observations; {columns:,} variables.",
+        "caveat": "Confirm that the rows represent the intended unit of analysis.",
+    })
+
+    missing = df.isna().sum()
+    missing_total = int(missing.sum())
+    if missing_total:
+        worst = missing[missing > 0].sort_values(ascending=False).head(3)
+        details = "; ".join(f"{col}: {int(value):,} ({value / rows:.1%})" for col, value in worst.items())
+        findings.append({
+            "area": "Data quality", "finding": f"{missing_total:,} missing cells ({missing_total / (rows * columns):.1%} of all cells).",
+            "evidence": "Highest missingness: " + details,
+            "caveat": "Investigate why values are missing before choosing deletion or imputation.",
+        })
+
+    duplicates = int(df.duplicated().sum())
+    if duplicates:
+        findings.append({
+            "area": "Data quality", "finding": f"{duplicates:,} fully duplicated rows ({duplicates / rows:.1%} of records).",
+            "evidence": f"{duplicates:,} duplicate rows detected using all columns.",
+            "caveat": "Repeated records may be valid in some datasets; verify the record key before removal.",
+        })
+
+    numeric = df.select_dtypes(include=np.number)
+    for col in numeric.columns:
+        series = numeric[col].replace([np.inf, -np.inf], np.nan).dropna()
+        if len(series) < 3 or series.nunique() < 2:
+            continue
+        mean, median = float(series.mean()), float(series.median())
+        std = float(series.std(ddof=1))
+        findings.append({
+            "area": "Distribution",
+            "finding": f"{col}: mean {mean:,.3g}; median {median:,.3g}.",
+            "evidence": f"n={len(series):,}; standard deviation={std:,.3g}; min={series.min():,.3g}; max={series.max():,.3g}.",
+            "caveat": "Large mean–median differences can indicate skew or influential observations; inspect the distribution.",
+        })
+
+    if numeric.shape[1] >= 2:
+        corr = numeric.replace([np.inf, -np.inf], np.nan).corr(min_periods=3)
+        pairs = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool)).stack().dropna()
+        if not pairs.empty:
+            pair = pairs.abs().sort_values(ascending=False).index[0]
+            value = float(corr.loc[pair[0], pair[1]])
+            findings.append({
+                "area": "Relationships",
+                "finding": f"{pair[0]} and {pair[1]} have the strongest observed absolute linear correlation (r={value:.2f}).",
+                "evidence": f"Pearson correlation calculated from available paired observations; r={value:.4f}.",
+                "caveat": "Correlation is not causation; check sample size, outliers, nonlinear patterns and confounding.",
+            })
+
+    for col in df.select_dtypes(include=["object", "category", "bool"]).columns:
+        counts = df[col].value_counts(dropna=True)
+        if len(counts) >= 2:
+            top = counts.index[0]
+            findings.append({
+                "area": "Categories",
+                "finding": f"{col}: '{top}' is the most frequent category ({int(counts.iloc[0]):,} records, {counts.iloc[0] / rows:.1%} of all rows).",
+                "evidence": f"{len(counts):,} observed non-missing categories; top category count={int(counts.iloc[0]):,}.",
+                "caveat": "Category frequencies are descriptive and depend on how categories and missing values are coded.",
+            })
+
+    return findings[:max(0, int(max_findings))]
+
+
 def safe_csv_bytes(df):
     out=df.copy()
     for c in out.select_dtypes(include=["object","string"]):
