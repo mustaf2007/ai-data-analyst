@@ -18,6 +18,7 @@ from analytics import (
 )
 from modeling import train_predictive_model, detect_anomalies
 from reporting import build_pdf_report
+from assistant import suggest_analyses, answer_dataset_question
 
 st.set_page_config(page_title="AI Data Analyst", page_icon="📊", layout="wide")
 st.title("📊 AI Data Analyst")
@@ -127,6 +128,7 @@ def initialise_state():
         "cleaning_report": None,
         "chart_exports": {},
         "report_artifacts": None,
+        "chat_history": [],
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -148,6 +150,7 @@ def set_dataset(data, source, upload_signature=None):
     st.session_state.cleaning_report = None
     st.session_state.chart_exports = {}
     st.session_state.report_artifacts = None
+    st.session_state.chat_history = []
     if upload_signature is not None:
         st.session_state.upload_signature = upload_signature
     clear_derived_results()
@@ -158,8 +161,8 @@ initialise_state()
 with st.sidebar:
     st.header("Workspace")
     selected_theme = st.selectbox(
-        "Appearance", ["Light", "Dark", "Green"],
-        index=0, help="Choose the visual theme for charts and the workspace.",
+        "Appearance", ["Light", "Dark", "Green", "Ocean", "Purple", "Sand"],
+        index=0, help="Choose a coordinated workspace and chart appearance.",
     )
     upload = st.file_uploader("Upload dataset", type=["csv", "xlsx"])
     reload_upload = st.button("Load selected file", use_container_width=True) if upload is not None else False
@@ -194,40 +197,62 @@ with st.sidebar:
 
     st.caption("Files are processed in this app session. Avoid uploading sensitive data to a public demo.")
 
-if st.session_state.active is None:
-    st.info("Upload a CSV/XLSX dataset or load the built-in sample to begin.")
-    st.markdown("**Explore · Clean · Visualize · Model · Report**")
-    st.stop()
-
-df = st.session_state.active
-p = profile_dataset(df)
-theme_templates = {"Light": "plotly_white", "Dark": "plotly_dark", "Green": "seaborn"}
-theme_template = theme_templates[selected_theme]
-px.defaults.template = theme_template
 theme_css = {
-    "Light": ("#f4f7fb", "#ffffff", "#172b4d", "#64748b"),
-    "Dark": ("#101827", "#182437", "#e5edf8", "#a8b6c9"),
-    "Green": ("#eef6f0", "#ffffff", "#173b2b", "#557363"),
+    "Light": ("#f4f7fb", "#ffffff", "#172b4d", "#64748b", "#2563eb"),
+    "Dark": ("#101827", "#182437", "#e5edf8", "#a8b6c9", "#60a5fa"),
+    "Green": ("#eef6f0", "#ffffff", "#173b2b", "#557363", "#16845b"),
+    "Ocean": ("#edf5fb", "#ffffff", "#15324b", "#58758d", "#087eae"),
+    "Purple": ("#f4f0fb", "#ffffff", "#30234d", "#76678f", "#7652c8"),
+    "Sand": ("#f8f4ec", "#fffdf8", "#43372b", "#847766", "#a66a32"),
 }
-page_bg, card_bg, text_color, muted_color = theme_css[selected_theme]
+page_bg, card_bg, text_color, muted_color, accent_color = theme_css[selected_theme]
 st.markdown(
     f"""
     <style>
-    .stApp {{ background: {page_bg}; color: {text_color}; }}
-    [data-testid="stMetric"] {{
-        background: {card_bg}; border: 1px solid rgba(120,140,160,.20);
-        padding: 14px 16px; border-radius: 14px;
+    :root {{ --app-bg: {page_bg}; --card-bg: {card_bg}; --app-text: {text_color};
+             --muted-text: {muted_color}; --accent: {accent_color}; }}
+    .stApp {{ background: var(--app-bg); color: var(--app-text); }}
+    [data-testid="stSidebar"] {{ background: var(--card-bg); }}
+    [data-testid="stMetric"], [data-testid="stVerticalBlockBorderWrapper"] {{
+        background: var(--card-bg); border: 1px solid color-mix(in srgb, var(--muted-text) 20%, transparent);
+        border-radius: 14px;
     }}
-    [data-testid="stVerticalBlockBorderWrapper"] {{ border-radius: 14px; }}
+    [data-testid="stMetric"] {{ padding: 14px 16px; }}
+    [data-testid="stMetricLabel"], [data-testid="stCaptionContainer"] {{ color: var(--muted-text); }}
+    .stButton > button, .stDownloadButton > button {{
+        border-radius: 10px; border-color: var(--accent); transition: all .15s ease;
+    }}
+    .stButton > button[kind="primary"] {{ background: var(--accent); border-color: var(--accent); }}
+    [data-baseweb="tab-list"] {{ gap: .35rem; }}
+    [data-baseweb="tab"] {{ border-radius: 9px 9px 0 0; }}
+    [data-testid="stChatMessage"] {{ background: var(--card-bg); border-radius: 14px; }}
+    [data-testid="stDataFrame"], [data-testid="stTable"] {{ border-radius: 12px; }}
     .block-container {{ padding-top: 1.5rem; }}
     h1, h2, h3 {{ letter-spacing: -0.025em; }}
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+if st.session_state.active is None:
+    st.info("Upload a CSV/XLSX dataset or load the built-in sample to begin.")
+    st.markdown("**Explore · Clean · Visualize · Model · Report**")
+    st.markdown("Choose a workspace appearance from the sidebar. The theme applies before a dataset is loaded.")
+    st.stop()
+
+df = st.session_state.active
+p = profile_dataset(df)
+theme_templates = {
+    "Light": "plotly_white", "Dark": "plotly_dark", "Green": "plotly_white",
+    "Ocean": "plotly_white", "Purple": "plotly_white", "Sand": "plotly_white",
+}
+theme_template = theme_templates[selected_theme]
+px.defaults.template = theme_template
+px.defaults.color_discrete_sequence = [accent_color, "#20a486", "#e09f3e", "#8b78c6", "#4c9bd6"]
 tabs = st.tabs([
     "Dashboard", "Data quality", "Clean data", "Explore", "Relationships",
     "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights", "Data story", "Time-series intelligence", "Dataset comparison", "Geographic intelligence", "Statistical testing",
+    "Analysis suggestions", "Ask the data",
 ])
 
 with tabs[0]:
@@ -1284,3 +1309,39 @@ with tabs[14]:
         "ANOVA when the equal-variance assumption is not flagged; other test families "
         "and repeated-analysis workflows do not receive automatic multiplicity correction."
     )
+ 
+with tabs[15]:
+    st.subheader("Recommended next steps")
+    st.caption("Suggestions are generated from the active dataset's structure, missingness, duplicates and column types. They are deterministic and do not replace research judgement.")
+    recommendations = suggest_analyses(df)
+    for item in recommendations:
+        with st.container(border=True):
+            head = st.columns([4, 1])
+            head[0].markdown("#### " + item["title"])
+            head[1].markdown("**" + item["priority"] + " priority**")
+            st.write(item["reason"])
+            st.caption("Suggested action: " + item["action"])
+    st.info("Recommendations are refreshed from the active dataset after upload or cleaning. Choose actions based on your research question, data provenance and assumptions.")
+
+with tabs[16]:
+    st.subheader("Ask your data")
+    st.caption("A local-first assistant that answers supported questions using calculations on the active dataset. No external AI service or paid API is used.")
+    st.markdown("Try: *What is the average sales?* · *Which region has the highest sales?* · *How many missing values?* · *What are the strongest correlations?*")
+    for message in st.session_state.chat_history:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+            evidence = message.get("evidence")
+            if isinstance(evidence, pd.DataFrame) and not evidence.empty:
+                st.dataframe(evidence, use_container_width=True, hide_index=True)
+    prompt = st.chat_input("Ask a question about your active dataset…", key="dataset_chat_input")
+    if prompt:
+        st.session_state.chat_history.append({"role": "user", "content": prompt})
+        result = answer_dataset_question(df, prompt)
+        st.session_state.chat_history.append({
+            "role": "assistant", "content": result["answer"],
+            "evidence": result.get("evidence"),
+        })
+        st.rerun()
+    if st.button("Clear conversation", key="clear_dataset_chat"):
+        st.session_state.chat_history = []
+        st.rerun()
