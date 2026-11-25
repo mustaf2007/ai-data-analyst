@@ -119,3 +119,51 @@ def safe_csv_bytes(df):
     for c in out.select_dtypes(include=["object","string"]):
         out[c]=out[c].map(lambda v:"'"+v if isinstance(v,str) and v.lstrip().startswith(("=","+","-","@","\t","\r")) else v)
     return out.to_csv(index=False).encode("utf-8-sig")
+
+
+def build_cleaning_report(before, after, *, drop_duplicates=False,
+                          missing_strategy="Keep as-is", selected_columns=None):
+    """Return auditable before/after cleaning metrics without mutating either frame."""
+    deduplicated = before.drop_duplicates() if drop_duplicates else before
+    selected = list(selected_columns) if selected_columns else deduplicated.columns.tolist()
+    missing_before = int(before.isna().sum().sum())
+    missing_after_dedup = int(deduplicated.isna().sum().sum())
+    missing_after = int(after.isna().sum().sum())
+
+    filled_cells = 0
+    rows_removed_for_missing = 0
+    if missing_strategy.startswith("Fill "):
+        eligible = set(selected)
+        if missing_strategy.startswith("Fill numeric"):
+            eligible &= set(deduplicated.select_dtypes(include=np.number).columns)
+        elif missing_strategy == "Fill categorical with mode":
+            eligible &= set(deduplicated.select_dtypes(include=["object", "category", "bool"]).columns)
+        filled_cells = int(deduplicated[list(eligible)].isna().sum().sum()
+                           - after[list(eligible)].isna().sum().sum()) if eligible else 0
+    elif missing_strategy == "Drop rows with missing values":
+        rows_removed_for_missing = max(0, len(deduplicated) - len(after))
+
+    before_profile = profile_dataset(before)
+    after_profile = profile_dataset(after)
+    per_column = pd.DataFrame({
+        "column": before.columns.astype(str),
+        "missing_before": [int(before[c].isna().sum()) for c in before.columns],
+        "missing_after": [int(after[c].isna().sum()) for c in after.columns],
+    })
+    per_column["missing_resolved"] = per_column["missing_before"] - per_column["missing_after"]
+
+    return {
+        "rows_before": int(len(before)),
+        "rows_after": int(len(after)),
+        "rows_removed": int(len(before) - len(after)),
+        "duplicates_removed": int(len(before) - len(deduplicated)),
+        "rows_removed_for_missing": int(rows_removed_for_missing),
+        "missing_before": missing_before,
+        "missing_after": missing_after,
+        "missing_filled": int(filled_cells),
+        "quality_before": float(before_profile["quality_score"]),
+        "quality_after": float(after_profile["quality_score"]),
+        "per_column": per_column,
+        "strategy": missing_strategy,
+        "selected_columns": list(selected),
+    }
