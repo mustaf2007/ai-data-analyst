@@ -241,3 +241,35 @@ def test_cleaning_removes_whitespace_only_unnamed_columns_and_audit_handles_remo
     assert bool(removed.loc["Unnamed: 2", "column_removed"])
     assert bool(removed.loc["Unnamed: 4", "column_removed"])
     assert report["missing_after"] == 0
+
+
+
+def test_detailed_insights_include_quality_distribution_correlation_and_categories():
+    from analytics import generate_detailed_insights
+    df = pd.DataFrame({
+        "sales": [10.0, 20.0, 30.0, 40.0],
+        "cost": [5.0, 10.0, 15.0, 20.0],
+        "region": ["North", "North", "South", None],
+    })
+    result = generate_detailed_insights(df)
+    areas = {item["area"] for item in result}
+    assert {"Dataset", "Distribution", "Relationships", "Categories"} <= areas
+    relationship = next(item for item in result if item["area"] == "Relationships")
+    assert "not causation" in relationship["caveat"].lower()
+    assert all(item["evidence"] and item["caveat"] for item in result)
+
+
+def test_detailed_insights_report_missingness_and_duplicates():
+    from analytics import generate_detailed_insights
+    df = pd.DataFrame({"value": [1.0, None, 1.0], "group": ["a", "b", "a"]})
+    result = generate_detailed_insights(df)
+    quality = [item["finding"] for item in result if item["area"] == "Data quality"]
+    assert any("missing cells" in item for item in quality)
+    assert any("duplicated rows" in item for item in quality)
+
+
+def test_detailed_insights_empty_data_and_limit_are_safe():
+    from analytics import generate_detailed_insights
+    assert generate_detailed_insights(pd.DataFrame()) == []
+    df = pd.DataFrame({"x": [1, 2, 3], "group": ["a", "b", "c"]})
+    assert len(generate_detailed_insights(df, max_findings=1)) == 1
