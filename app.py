@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from analytics import (
     DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset,
     numeric_summary, categorical_summary, correlation_matrix, grouped_summary,
-    infer_datetime_columns, generate_insights, safe_csv_bytes,
+    infer_datetime_columns, generate_insights, safe_csv_bytes, build_cleaning_report,
 )
 from modeling import train_predictive_model, detect_anomalies
 from reporting import build_pdf_report
@@ -33,6 +33,7 @@ def initialise_state():
         "anomalies": None,
         "model_config": None,
         "anomaly_config": None,
+        "cleaning_report": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -51,6 +52,7 @@ def set_dataset(data, source, upload_signature=None):
     st.session_state.raw = data.copy(deep=True)
     st.session_state.active = data.copy(deep=True)
     st.session_state.source = source
+    st.session_state.cleaning_report = None
     if upload_signature is not None:
         st.session_state.upload_signature = upload_signature
     clear_derived_results()
@@ -89,6 +91,7 @@ with st.sidebar:
     if st.session_state.raw is not None and st.button("Reset to original"):
         st.session_state.active = st.session_state.raw.copy(deep=True)
         clear_derived_results()
+        st.session_state.cleaning_report = None
 
     st.caption("Files are processed in this app session. Avoid uploading sensitive data to a public demo.")
 
@@ -147,12 +150,56 @@ with tabs[2]:
                 df, drop_duplicates=dedupe, missing_strategy=strategy,
                 selected_columns=selected or None,
             )
+            if cleaned.empty:
+                raise ValueError("These cleaning settings would remove every row. Your dataset was not changed.")
+            report = build_cleaning_report(
+                df, cleaned, drop_duplicates=dedupe,
+                missing_strategy=strategy, selected_columns=selected or None,
+            )
             st.session_state.active = cleaned
+            st.session_state.cleaning_report = report
             clear_derived_results()
-            st.success(f"Cleaning applied. {len(df) - len(cleaned):,} rows removed.")
             st.rerun()
         except (ValueError, TypeError) as exc:
             st.error(f"Cleaning could not be applied: {exc}")
+
+    cleaning_report = st.session_state.cleaning_report
+    if cleaning_report is not None:
+        st.markdown("#### Cleaning result")
+        if cleaning_report["rows_removed"] == 0 and cleaning_report["missing_filled"] == 0:
+            st.info("Cleaning completed. No rows or missing values needed to be changed under the selected settings.")
+        else:
+            st.success("Cleaning completed successfully. The updated dataset is now active.")
+        st.caption(
+            f"Applied strategy: {cleaning_report['strategy']} · "
+            f"Selected columns: {', '.join(cleaning_report['selected_columns']) if cleaning_report['selected_columns'] else 'All eligible columns'}"
+        )
+        report_metrics = st.columns(5)
+        report_metrics[0].metric(
+            "Rows", f"{cleaning_report['rows_before']:,} → {cleaning_report['rows_after']:,}",
+            delta=f"-{cleaning_report['rows_removed']:,} removed" if cleaning_report["rows_removed"] else "No rows removed",
+        )
+        report_metrics[1].metric("Duplicates removed", f"{cleaning_report['duplicates_removed']:,}")
+        report_metrics[2].metric("Rows removed for missing", f"{cleaning_report['rows_removed_for_missing']:,}")
+        report_metrics[3].metric("Missing cells filled", f"{cleaning_report['missing_filled']:,}")
+        report_metrics[4].metric(
+            "Missing cells remaining", f"{cleaning_report['missing_after']:,}",
+            delta=f"{cleaning_report['missing_after'] - cleaning_report['missing_before']:+,} vs before",
+            delta_color="inverse",
+        )
+        st.write("**Data quality score (heuristic)**")
+        st.metric(
+            "Before → after",
+            f"{cleaning_report['quality_before']:.1f} → {cleaning_report['quality_after']:.1f} / 100",
+            delta=f"{cleaning_report['quality_after'] - cleaning_report['quality_before']:+.1f}",
+        )
+        st.write("**Missing values by column**")
+        st.dataframe(cleaning_report["per_column"], use_container_width=True, hide_index=True)
+        st.download_button(
+            "Download cleaning report (CSV)",
+            cleaning_report["per_column"].to_csv(index=False).encode("utf-8-sig"),
+            "cleaning_report.csv", "text/csv",
+        )
 
 with tabs[3]:
     numeric = df.select_dtypes(include=np.number).columns.tolist()
