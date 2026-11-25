@@ -9,7 +9,7 @@ A local-first data analysis workspace built with Python, Streamlit and open-sour
 - **Upload & preview:** CSV and XLSX, file-size and dataset-shape safeguards, duplicate column-name normalization.
 - **Overview:** dataset dimensions, missingness, duplicate-row count, heuristic quality score, automated observations and data preview.
 - **Data quality:** column-level data types, non-null counts, missingness, unique counts and sample values.
-- **Cleaning:** remove duplicate rows; drop rows with missing values; impute numeric values with median, mean or zero; impute categorical values with mode. Original upload remains available for reset.
+- **Cleaning:** remove duplicate rows; drop rows with missing values; impute numeric values with median, mean or zero; impute categorical values with mode. After applying changes, the app displays an automatic before/after report with row counts, duplicates removed, missing cells filled/remaining, a per-column missingness table, and heuristic quality-score change. The per-column report can be downloaded as CSV. The original upload remains available for reset.
 - **Exploration:** numeric descriptive statistics, categorical frequency tables, histograms, box plots, grouped aggregations and date trends with selectable aggregation.
 - **Relationships:** Pearson, Spearman and Kendall correlation matrices plus strongest pairwise associations.
 - **Predictive modeling:** local Random Forest regression/classification baseline with hold-out metrics and actual-vs-predicted comparison.
