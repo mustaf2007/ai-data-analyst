@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from analytics import (
     DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset,
     numeric_summary, categorical_summary, correlation_matrix, grouped_summary,
-    infer_datetime_columns, generate_insights, generate_detailed_insights, safe_csv_bytes, build_cleaning_report, validate_analysis_readiness, column_quality_diagnostics,
+    infer_datetime_columns, generate_insights, generate_detailed_insights, build_data_story, safe_csv_bytes, build_cleaning_report, validate_analysis_readiness, column_quality_diagnostics,
 )
 from modeling import train_predictive_model, detect_anomalies
 from reporting import build_pdf_report
@@ -227,7 +227,7 @@ st.markdown(
 )
 tabs = st.tabs([
     "Dashboard", "Data quality", "Clean data", "Explore", "Relationships",
-    "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights",
+    "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights", "Data story",
 ])
 
 with tabs[0]:
@@ -767,3 +767,52 @@ with tabs[9]:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key="download_detailed_insights_excel",
         )
+
+
+with tabs[10]:
+    st.subheader("Data Story Generator")
+    st.caption("Create a structured, evidence-linked narrative from selected findings. This is template-based reporting, not generative AI.")
+    story_title = st.text_input("Brief title", "Data Analysis Brief", key="story_title")
+    audience = st.selectbox(
+        "Intended audience",
+        ["General", "Policy makers", "Researchers", "Executive leadership", "Development partners"],
+        key="story_audience",
+    )
+    context = st.text_area(
+        "Background or research question (optional)",
+        placeholder="Describe the purpose of this analysis, its geographic or sector focus, and the question it addresses.",
+        key="story_context",
+    )
+    story_findings = generate_detailed_insights(df)
+    if story_findings:
+        options = {
+            f"{item['area']} — {item['finding']}": item
+            for item in story_findings
+        }
+        selected_labels = st.multiselect(
+            "Select findings to include",
+            list(options.keys()),
+            default=list(options.keys()),
+            key="story_selected_findings",
+        )
+        selected_findings = [options[label] for label in selected_labels]
+        story = build_data_story(
+            selected_findings, title=story_title, audience=audience, context=context
+        )
+        st.text_area("Generated analytical narrative", value=story, height=520)
+        st.download_button(
+            "Download data story (TXT)",
+            data=story.encode("utf-8"),
+            file_name="data_analysis_brief.txt",
+            mime="text/plain",
+            key="download_data_story",
+        )
+        st.download_button(
+            "Download selected evidence (CSV)",
+            data=safe_csv_bytes(pd.DataFrame(selected_findings)),
+            file_name="data_story_evidence.csv",
+            mime="text/csv",
+            key="download_data_story_evidence",
+        )
+    else:
+        st.info("Upload or load a dataset with usable observations to generate a data story.")
