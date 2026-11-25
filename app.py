@@ -162,9 +162,11 @@ with tabs[1]:
 with tabs[2]:
     with st.form("clean"):
         dedupe = st.checkbox("Remove duplicate rows", True)
+        drop_empty = st.checkbox("Remove entirely empty columns", True)
         strategy = st.selectbox(
             "Missing-value strategy",
             [
+                "Fill numeric with median and categorical with mode",
                 "Keep as-is", "Drop rows with missing values",
                 "Fill numeric with median", "Fill numeric with mean",
                 "Fill numeric with zero", "Fill categorical with mode",
@@ -175,8 +177,8 @@ with tabs[2]:
     if submitted:
         try:
             cleaned = clean_dataset(
-                df, drop_duplicates=dedupe, missing_strategy=strategy,
-                selected_columns=selected or None,
+                df, drop_duplicates=dedupe, drop_empty_columns=drop_empty,
+                missing_strategy=strategy, selected_columns=selected or None,
             )
             if cleaned.empty:
                 raise ValueError("These cleaning settings would remove every row. Your dataset was not changed.")
@@ -192,14 +194,24 @@ with tabs[2]:
             st.error(f"Cleaning could not be applied: {exc}")
 
     cleaning_report = st.session_state.cleaning_report
+    st.markdown("#### Analysis dataset download")
     if cleaning_report is not None:
-        st.markdown("#### Cleaning result")
+        st.success("A cleaned working dataset is active. Download this version for your analysis.")
         st.download_button(
             "Download cleaned dataset (CSV)",
             safe_csv_bytes(df),
             "cleaned_dataset.csv",
             "text/csv",
             key="download_cleaned_dataset",
+        )
+    else:
+        st.info("No cleaning operation has been applied yet. You can still download the current dataset, or apply the recommended cleaning settings above first.")
+        st.download_button(
+            "Download current dataset (CSV)",
+            safe_csv_bytes(df),
+            "analysis_dataset.csv",
+            "text/csv",
+            key="download_current_dataset_clean_tab",
         )
         if cleaning_report["rows_removed"] == 0 and cleaning_report["missing_filled"] == 0:
             st.info("Cleaning completed. No rows or missing values needed to be changed under the selected settings.")
@@ -345,11 +357,15 @@ with tabs[6]:
     st.caption("Anomaly flags are screening signals, not proof of errors or fraud.")
 
 with tabs[7]:
+    st.markdown("#### Dataset downloads")
     if st.session_state.cleaning_report is not None:
         st.download_button(
             "Download cleaned dataset (CSV)", safe_csv_bytes(df),
             "cleaned_dataset.csv", "text/csv",
+            key="download_cleaned_dataset_export",
         )
+    else:
+        st.info("No cleaning has been applied yet. The active dataset is available below.")
     st.download_button(
         "Download active dataset (CSV)", safe_csv_bytes(df),
         "analysis_dataset.csv", "text/csv",
