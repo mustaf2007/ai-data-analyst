@@ -109,3 +109,36 @@ def test_cleaning_report_counts_rows_removed_for_missing():
     )
     assert report["rows_removed_for_missing"] == 1
     assert report["rows_after"] == 2
+
+
+
+def test_analysis_readiness_reports_all_checks_passed_for_clean_dataset():
+    from analytics import validate_analysis_readiness
+    df = pd.DataFrame({"sales": [10, 20, 30], "region": ["A", "B", "C"]})
+    result = validate_analysis_readiness(df)
+    assert result["status"] == "Ready"
+    assert result["score"] == 100.0
+    assert result["passed"] == result["total"]
+
+
+def test_analysis_readiness_flags_missing_duplicates_and_constant_columns():
+    from analytics import validate_analysis_readiness
+    df = pd.DataFrame({
+        "value": [1.0, 1.0, None],
+        "constant": ["same", "same", "same"],
+    })
+    result = validate_analysis_readiness(df)
+    assert result["status"] == "Ready with warnings"
+    assert result["score"] < 100
+    assert result["warnings"] >= 3
+
+
+def test_analysis_readiness_blocks_infinite_numeric_values():
+    from analytics import validate_analysis_readiness
+    df = pd.DataFrame({"value": [1.0, float("inf"), 3.0], "group": ["a", "b", "c"]})
+    result = validate_analysis_readiness(df)
+    assert result["status"] == "Not ready"
+    assert result["blockers"] >= 1
+    assert result["checks"].loc[
+        result["checks"]["check"] == "No infinite numeric values", "status"
+    ].iloc[0] == "Blocked"
