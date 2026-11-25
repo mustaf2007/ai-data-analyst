@@ -75,6 +75,69 @@ def clean_dataset(df, *, drop_duplicates=False, missing_strategy="Keep as-is", s
     elif missing_strategy!="Keep as-is": raise ValueError("Unknown missing-value strategy.")
     return out
 
+
+def validate_analysis_readiness(df):
+    """Run generic structural and quality checks; this is not domain certification."""
+    checks = []
+    def add(name, passed, detail, severity="warning"):
+        checks.append({
+            "check": name,
+            "status": "Passed" if passed else ("Blocked" if severity == "blocker" else "Needs attention"),
+            "detail": detail,
+            "passed": bool(passed),
+            "severity": severity,
+        })
+
+    rows, columns = df.shape
+    add("Dataset is not empty", rows > 0, f"{rows:,} rows found.", "blocker")
+    add("Columns are present", columns > 0, f"{columns:,} columns found.", "blocker")
+
+    if columns:
+        all_null = [str(c) for c in df.columns if df[c].isna().all()]
+        add("No entirely empty columns", not all_null,
+            "No entirely empty columns." if not all_null else "Empty columns: " + ", ".join(all_null))
+        constant = [str(c) for c in df.columns if df[c].nunique(dropna=True) <= 1]
+        add("Variables have usable variation", not constant,
+            "All columns have variation." if not constant else "Constant or all-missing columns: " + ", ".join(constant))
+    else:
+        add("No entirely empty columns", False, "No columns are available.", "blocker")
+        add("Variables have usable variation", False, "No columns are available.", "blocker")
+
+    numeric = df.select_dtypes(include=np.number)
+    infinite_columns = [str(c) for c in numeric.columns
+                        if np.isinf(numeric[c].to_numpy(dtype=float, na_value=np.nan)).any()]
+    add("No infinite numeric values", not infinite_columns,
+        "No positive or negative infinity values." if not infinite_columns
+        else "Infinite values found in: " + ", ".join(infinite_columns), "blocker")
+
+    missing = int(df.isna().sum().sum())
+    add("No missing cells", missing == 0,
+        "No missing cells." if missing == 0 else f"{missing:,} missing cells remain.")
+    duplicates = int(df.duplicated().sum()) if rows else 0
+    add("No duplicate rows", duplicates == 0,
+        "No fully duplicated rows." if duplicates == 0 else f"{duplicates:,} duplicate rows remain.")
+    add("At least two observations", rows >= 2,
+        f"{rows:,} observations available." if rows >= 2
+        else "At least two observations are generally needed for meaningful analysis.")
+
+    result = pd.DataFrame(checks)
+    passed = int(result["passed"].sum()) if not result.empty else 0
+    total = len(result)
+    blockers = int(((result["status"] == "Blocked")).sum())
+    warnings = int(((result["status"] == "Needs attention")).sum())
+    score = round(100 * passed / total, 1) if total else 0.0
+    status = "Not ready" if blockers else ("Ready" if warnings == 0 else "Ready with warnings")
+    return {
+        "status": status,
+        "score": score,
+        "passed": passed,
+        "total": total,
+        "blockers": blockers,
+        "warnings": warnings,
+        "checks": result,
+    }
+
+
 def numeric_summary(df):
     n=df.select_dtypes(include=np.number)
     return pd.DataFrame() if n.empty else n.describe().T.rename_axis("variable").reset_index()
