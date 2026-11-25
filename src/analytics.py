@@ -793,7 +793,7 @@ def build_geographic_summary(
     result.columns = ["geography", "value"]
     counts = valid.groupby("_geography")["_measure"].size().rename("observations")
     result = result.merge(counts, left_on="geography", right_index=True, how="left")
-    result = result.sort_values("value", ascending=False, kind="stable").reset_index(drop=True)
+    result = result.sort_values(["value", "geography"], ascending=[False, False], kind="stable").reset_index(drop=True)
     result["rank"] = np.arange(1, len(result) + 1)
     total = float(result["value"].sum())
     if aggregation == "sum" and total > 0 and (result["value"] >= 0).all():
