@@ -183,3 +183,33 @@ def test_time_series_readiness_requires_detectable_date_column():
     result = validate_analysis_readiness(df, "Time-series analysis")
     checks = result["checks"].set_index("check")
     assert checks.loc["A date/time column is identifiable", "status"] == "Passed"
+
+
+
+def test_combined_cleaning_fills_numeric_and_categorical_and_drops_empty_columns():
+    df = pd.DataFrame({
+        "number": [1.0, None, 3.0],
+        "category": ["a", None, "b"],
+        "empty": [None, None, None],
+    })
+    cleaned = clean_dataset(
+        df,
+        drop_duplicates=True,
+        drop_empty_columns=True,
+        missing_strategy="Fill numeric with median and categorical with mode",
+    )
+    assert "empty" not in cleaned.columns
+    assert cleaned["number"].isna().sum() == 0
+    assert cleaned["category"].isna().sum() == 0
+    assert len(cleaned) == 3
+
+
+def test_cleaned_dataset_can_be_downloaded_after_combined_cleaning():
+    from analytics import safe_csv_bytes
+    df = pd.DataFrame({"number": [1.0, None], "category": ["x", None]})
+    cleaned = clean_dataset(
+        df, drop_empty_columns=True,
+        missing_strategy="Fill numeric with median and categorical with mode",
+    )
+    exported = pd.read_csv(__import__("io").BytesIO(safe_csv_bytes(cleaned)))
+    assert exported.isna().sum().sum() == 0
