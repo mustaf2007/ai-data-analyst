@@ -196,7 +196,7 @@ with tabs[2]:
     cleaning_report = st.session_state.cleaning_report
     st.markdown("#### Analysis dataset download")
     if cleaning_report is not None:
-        st.success("A cleaned working dataset is active. Download this version for your analysis.")
+        st.success("Cleaning report generated. The updated working dataset is active.")
         st.download_button(
             "Download cleaned dataset (CSV)",
             safe_csv_bytes(df),
@@ -204,19 +204,10 @@ with tabs[2]:
             "text/csv",
             key="download_cleaned_dataset",
         )
-    else:
-        st.info("No cleaning operation has been applied yet. You can still download the current dataset, or apply the recommended cleaning settings above first.")
-        st.download_button(
-            "Download current dataset (CSV)",
-            safe_csv_bytes(df),
-            "analysis_dataset.csv",
-            "text/csv",
-            key="download_current_dataset_clean_tab",
-        )
-        if cleaning_report["rows_removed"] == 0 and cleaning_report["missing_filled"] == 0:
-            st.info("Cleaning completed. No rows or missing values needed to be changed under the selected settings.")
+        if cleaning_report["rows_removed"] == 0 and cleaning_report["missing_filled"] == 0 and not cleaning_report["per_column"]["column_removed"].any():
+            st.info("The cleaning checks found no rows, missing values, or empty columns that needed changes.")
         else:
-            st.success("Cleaning completed successfully. The updated dataset is now active.")
+            st.success("Cleaning changes have been applied. Review the before-and-after audit below.")
         st.caption(
             f"Applied strategy: {cleaning_report['strategy']} · "
             f"Selected columns: {', '.join(cleaning_report['selected_columns']) if cleaning_report['selected_columns'] else 'All eligible columns'}"
@@ -226,26 +217,31 @@ with tabs[2]:
             "Rows", f"{cleaning_report['rows_before']:,} → {cleaning_report['rows_after']:,}",
             delta=f"-{cleaning_report['rows_removed']:,} removed" if cleaning_report["rows_removed"] else "No rows removed",
         )
-        report_metrics[1].metric("Duplicates removed", f"{cleaning_report['duplicates_removed']:,}")
-        report_metrics[2].metric("Rows removed for missing", f"{cleaning_report['rows_removed_for_missing']:,}")
+        report_metrics[1].metric("Columns", f"{len(cleaning_report['per_column'])} → {len(df.columns)}")
+        report_metrics[2].metric("Duplicates removed", f"{cleaning_report['duplicates_removed']:,}")
         report_metrics[3].metric("Missing cells filled", f"{cleaning_report['missing_filled']:,}")
-        report_metrics[4].metric(
-            "Missing cells remaining", f"{cleaning_report['missing_after']:,}",
-            delta=f"{cleaning_report['missing_after'] - cleaning_report['missing_before']:+,} vs before",
-            delta_color="inverse",
-        )
+        report_metrics[4].metric("Missing cells remaining", f"{cleaning_report['missing_after']:,}")
         st.write("**Data quality score (heuristic)**")
         st.metric(
             "Before → after",
             f"{cleaning_report['quality_before']:.1f} → {cleaning_report['quality_after']:.1f} / 100",
             delta=f"{cleaning_report['quality_after'] - cleaning_report['quality_before']:+.1f}",
         )
-        st.write("**Missing values by column**")
+        st.write("**Column-by-column cleaning audit**")
         st.dataframe(cleaning_report["per_column"], use_container_width=True, hide_index=True)
         st.download_button(
             "Download cleaning report (CSV)",
             cleaning_report["per_column"].to_csv(index=False).encode("utf-8-sig"),
             "cleaning_report.csv", "text/csv",
+        )
+    else:
+        st.info("No cleaning operation has been applied yet. You can download the current dataset or apply the recommended settings above.")
+        st.download_button(
+            "Download current dataset (CSV)",
+            safe_csv_bytes(df),
+            "analysis_dataset.csv",
+            "text/csv",
+            key="download_current_dataset_clean_tab",
         )
 
 with tabs[3]:
