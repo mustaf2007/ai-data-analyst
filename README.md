@@ -8,7 +8,7 @@ A local-first data analysis workspace built with Python, Streamlit and open-sour
 
 - **Upload & preview:** CSV and XLSX, file-size and dataset-shape safeguards, duplicate column-name normalization.
 - **Overview:** dataset dimensions, missingness, duplicate-row count, heuristic quality score, automated observations and data preview.
-- **Data quality & readiness:** column-level data types, non-null counts, missingness, unique counts and sample values, plus a general analysis-readiness checklist with passed checks, warnings, blockers and a transparent percentage score.
+- **Data quality & readiness:** column-level data types, non-null counts, missingness, unique counts and sample values, plus analysis-specific readiness checks for exploratory analysis, correlation, regression, classification and time-series workflows. Column diagnostics classify missingness severity and flag suspicious headers and numeric-looking text columns.
 - **Cleaning:** remove duplicate rows; drop rows with missing values; impute numeric values with median, mean or zero; impute categorical values with mode. After applying changes, the app displays an automatic before/after report with row counts, duplicates removed, missing cells filled/remaining, a per-column missingness table, and heuristic quality-score change. The per-column report can be downloaded as CSV, and the cleaned active dataset is available as `cleaned_dataset.csv`. The original upload remains available for reset.
 - **Exploration:** numeric descriptive statistics, categorical frequency tables, histograms, box plots, grouped aggregations and date trends with selectable aggregation.
 - **Relationships:** Pearson, Spearman and Kendall correlation matrices plus strongest pairwise associations.
@@ -58,7 +58,7 @@ Community Cloud is suitable for a public demo and lightweight use. It is not a s
 - The app has no database and does not intentionally persist uploaded datasets. Data is held in Streamlit session state and in process memory while the session is active. Hosting providers may still process application traffic and runtime data; consult the host's current privacy terms.
 - Do not upload personal, confidential, regulated or commercially sensitive data to a public demo.
 - The 20 MB, 250,000-row and 150-column limits are application safeguards, not guarantees of successful processing under every hosting resource limit.
-- The overview quality score is a **heuristic**: 70% completeness and 30% row uniqueness. The analysis-readiness percentage is the share of generic checklist checks passed; neither score is a certification or a guarantee of suitability for a specific analysis. Review warnings and apply domain-specific validation.
+- The overview quality score is a **heuristic**: 70% completeness and 30% row uniqueness. The analysis-readiness percentage is the share of checks passed for the selected workflow; it is not a certification or a guarantee of suitability. Review warnings and apply domain-specific validation.
 - Correlation does not imply causation.
 - Predictive modeling is a baseline workflow. The random hold-out split is not appropriate for every time-series, panel, grouped or leakage-prone dataset. It does not perform automated feature leakage detection, temporal validation, hyperparameter optimization or model governance.
 - Anomaly detection identifies unusual patterns, not confirmed errors, fraud or misconduct.
