@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from analytics import (
     DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset,
     numeric_summary, categorical_summary, correlation_matrix, grouped_summary,
-    infer_datetime_columns, generate_insights, safe_csv_bytes, build_cleaning_report,
+    infer_datetime_columns, generate_insights, safe_csv_bytes, build_cleaning_report, validate_analysis_readiness,
 )
 from modeling import train_predictive_model, detect_anomalies
 from reporting import build_pdf_report
@@ -124,6 +124,21 @@ with tabs[0]:
 
 with tabs[1]:
     st.caption("The quality score is a heuristic, not a certification or full domain-specific audit.")
+    readiness = validate_analysis_readiness(df)
+    st.markdown("#### Analysis-readiness validation")
+    readiness_cols = st.columns(4)
+    readiness_cols[0].metric("Readiness status", readiness["status"])
+    readiness_cols[1].metric("Checklist score", f'{readiness["score"]:.1f}%')
+    readiness_cols[2].metric("Checks passed", f'{readiness["passed"]}/{readiness["total"]}')
+    readiness_cols[3].metric("Issues to review", readiness["blockers"] + readiness["warnings"])
+    if readiness["status"] == "Ready":
+        st.success("The dataset passed all general-purpose validation checks and is ready for exploratory analysis.")
+    elif readiness["status"] == "Ready with warnings":
+        st.warning("The dataset can be explored, but review the outstanding quality warnings before relying on results.")
+    else:
+        st.error("The dataset has blocking issues that should be corrected before analysis.")
+    st.caption("The checklist score measures only these generic checks. It is not a guarantee of suitability for a particular research question, model, or statistical method.")
+    st.dataframe(readiness["checks"][["check", "status", "detail"]], use_container_width=True, hide_index=True)
     st.dataframe(column_profile(df), use_container_width=True)
     st.write("Missing values by column")
     if p["missing_by_column"].empty:
@@ -166,6 +181,13 @@ with tabs[2]:
     cleaning_report = st.session_state.cleaning_report
     if cleaning_report is not None:
         st.markdown("#### Cleaning result")
+        st.download_button(
+            "Download cleaned dataset (CSV)",
+            safe_csv_bytes(df),
+            "cleaned_dataset.csv",
+            "text/csv",
+            key="download_cleaned_dataset",
+        )
         if cleaning_report["rows_removed"] == 0 and cleaning_report["missing_filled"] == 0:
             st.info("Cleaning completed. No rows or missing values needed to be changed under the selected settings.")
         else:
@@ -310,6 +332,11 @@ with tabs[6]:
     st.caption("Anomaly flags are screening signals, not proof of errors or fraud.")
 
 with tabs[7]:
+    if st.session_state.cleaning_report is not None:
+        st.download_button(
+            "Download cleaned dataset (CSV)", safe_csv_bytes(df),
+            "cleaned_dataset.csv", "text/csv",
+        )
     st.download_button(
         "Download active dataset (CSV)", safe_csv_bytes(df),
         "analysis_dataset.csv", "text/csv",
