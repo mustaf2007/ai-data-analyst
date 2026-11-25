@@ -476,7 +476,18 @@ def build_time_series_analysis(
     if not isinstance(moving_average_window, (int, np.integer)) or moving_average_window < 2:
         raise ValueError("Moving-average window must be an integer of at least 2.")
 
-    dates = pd.to_datetime(df[date_column], errors="coerce")
+    date_values = df[date_column]
+    if (
+        pd.api.types.is_numeric_dtype(date_values)
+        and str(date_column).strip().lower() in {"year", "yr", "yyyy"}
+    ):
+        numeric_years = pd.to_numeric(date_values, errors="coerce")
+        dates = pd.to_datetime(
+            numeric_years.where(numeric_years.between(1000, 9999)).round().astype("Int64").astype("string") + "-01-01",
+            errors="coerce",
+        )
+    else:
+        dates = pd.to_datetime(date_values, errors="coerce")
     values = pd.to_numeric(df[value_column], errors="coerce")
     valid = dates.notna() & values.notna() & np.isfinite(values)
     working = pd.DataFrame({"period": dates[valid], "value": values[valid]})
