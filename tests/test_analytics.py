@@ -273,3 +273,30 @@ def test_detailed_insights_empty_data_and_limit_are_safe():
     assert generate_detailed_insights(pd.DataFrame()) == []
     df = pd.DataFrame({"x": [1, 2, 3], "group": ["a", "b", "c"]})
     assert len(generate_detailed_insights(df, max_findings=1)) == 1
+
+
+
+def test_data_story_includes_selected_evidence_and_limitations():
+    from analytics import build_data_story
+    findings = [
+        {"area": "Dataset", "finding": "The dataset contains 100 rows.",
+         "evidence": "100 observations; 4 variables.",
+         "caveat": "Confirm the unit of analysis."},
+        {"area": "Relationships", "finding": "A and B are correlated (r=0.8).",
+         "evidence": "Pearson r=0.8.", "caveat": "Correlation is not causation."},
+    ]
+    story = build_data_story(
+        findings, title="Somalia sector brief", audience="Policy makers",
+        context="Review sector performance over time.",
+    )
+    assert "Somalia sector brief" in story
+    assert "Policy makers" in story
+    assert "Pearson r=0.8" in story
+    assert "Correlation does not demonstrate causation" in story
+    assert "Recommended next steps" in story
+
+
+def test_data_story_handles_empty_selection():
+    from analytics import build_data_story
+    story = build_data_story([], title="Empty brief")
+    assert "No supported findings were selected" in story
