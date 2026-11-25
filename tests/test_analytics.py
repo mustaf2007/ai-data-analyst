@@ -445,3 +445,54 @@ def test_dataset_comparison_skips_high_cardinality_categories_with_warning():
     result = compare_datasets(left, right, categorical_limit=3)
     assert result["categorical"].empty
     assert any("categorical distribution skipped" in warning for warning in result["warnings"])
+
+
+
+def test_geographic_summary_aggregates_sorts_and_calculates_share():
+    from analytics import build_geographic_summary
+    df = pd.DataFrame({
+        "region": ["North", "South", "North", "East"],
+        "production": [10, 20, 15, 5],
+    })
+    result = build_geographic_summary(df, "region", "production")
+    data = result["data"].set_index("geography")
+    assert data.loc["North", "value"] == pytest.approx(25)
+    assert data.loc["South", "rank"] == 2
+    assert data.loc["North", "share_pct"] == pytest.approx(25 / 60 * 100)
+    assert result["coverage"]["geographic_groups"] == 3
+    assert result["coverage"]["included_rows"] == 4
+
+
+def test_geographic_summary_excludes_missing_labels_and_invalid_values():
+    from analytics import build_geographic_summary
+    df = pd.DataFrame({
+        "country": ["Somalia", None, "Kenya", "  "],
+        "gdp": [100, 20, np.inf, 40],
+    })
+    result = build_geographic_summary(df, "country", "gdp")
+    assert result["data"]["geography"].tolist() == ["Somalia"]
+    assert result["coverage"]["excluded_rows"] == 3
+    assert len(result["warnings"]) == 2
+
+
+def test_geographic_summary_supports_mean_and_top_n():
+    from analytics import build_geographic_summary
+    df = pd.DataFrame({
+        "district": ["A", "A", "B", "C"],
+        "rate": [2, 4, 3, 8],
+    })
+    result = build_geographic_summary(df, "district", "rate", aggregation="mean", top_n=2)
+    assert result["data"]["geography"].tolist() == ["C", "B"]
+    assert result["data"]["value"].tolist() == [8.0, 3.0]
+    assert result["data"]["share_pct"].isna().all()
+
+
+def test_geographic_summary_validates_columns_and_measure():
+    from analytics import build_geographic_summary
+    df = pd.DataFrame({"area": ["A"], "count": [1]})
+    with pytest.raises(ValueError, match="must exist"):
+        build_geographic_summary(df, "missing", "count")
+    with pytest.raises(ValueError, match="numeric measure"):
+        build_geographic_summary(
+            pd.DataFrame({"area": ["A"], "count": ["unknown"]}), "area", "count"
+        )
