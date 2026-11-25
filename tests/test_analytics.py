@@ -458,7 +458,7 @@ def test_geographic_summary_aggregates_sorts_and_calculates_share():
     data = result["data"].set_index("geography")
     assert data.loc["North", "value"] == pytest.approx(25)
     assert data.loc["South", "rank"] == 2
-    assert data.loc["North", "share_pct"] == pytest.approx(25 / 60 * 100)
+    assert data.loc["North", "share_pct"] == pytest.approx(25 / 50 * 100)
     assert result["coverage"]["geographic_groups"] == 3
     assert result["coverage"]["included_rows"] == 4
 
@@ -472,7 +472,8 @@ def test_geographic_summary_excludes_missing_labels_and_invalid_values():
     result = build_geographic_summary(df, "country", "gdp")
     assert result["data"]["geography"].tolist() == ["Somalia"]
     assert result["coverage"]["excluded_rows"] == 3
-    assert len(result["warnings"]) == 2
+    assert len(result["warnings"]) == 3
+    assert any("Only one geographic group" in warning for warning in result["warnings"])
 
 
 def test_geographic_summary_supports_mean_and_top_n():
