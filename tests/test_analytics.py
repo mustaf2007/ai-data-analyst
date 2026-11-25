@@ -213,3 +213,31 @@ def test_cleaned_dataset_can_be_downloaded_after_combined_cleaning():
     )
     exported = pd.read_csv(__import__("io").BytesIO(safe_csv_bytes(cleaned)))
     assert exported.isna().sum().sum() == 0
+
+
+
+def test_cleaning_removes_whitespace_only_unnamed_columns_and_audit_handles_removed_columns():
+    df = pd.DataFrame({
+        "Year": [1961, 1962, 1963],
+        "Sorghum production tonnes": [352500, 350000, 330700],
+        "Unnamed: 2": ["", "   ", None],
+        "Temperature anomaly": [-0.4264, -0.60355, -0.70704],
+        "Unnamed: 4": [None, "", "  "],
+        "Precipitation anomaly": [104.684, -14.9681, 133.1915],
+    })
+    cleaned = clean_dataset(
+        df, drop_empty_columns=True,
+        missing_strategy="Fill numeric with median and categorical with mode",
+    )
+    assert list(cleaned.columns) == [
+        "Year", "Sorghum production tonnes", "Temperature anomaly", "Precipitation anomaly"
+    ]
+    assert cleaned["Sorghum production tonnes"].tolist() == [352500, 350000, 330700]
+    report = build_cleaning_report(
+        df, cleaned, drop_duplicates=True,
+        missing_strategy="Fill numeric with median and categorical with mode",
+    )
+    removed = report["per_column"].set_index("column")
+    assert bool(removed.loc["Unnamed: 2", "column_removed"])
+    assert bool(removed.loc["Unnamed: 4", "column_removed"])
+    assert report["missing_after"] == 0
