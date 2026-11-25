@@ -1232,6 +1232,18 @@ with tabs[14]:
         if not stat_result["group_summary"].empty:
             st.markdown("#### Group summaries")
             st.dataframe(stat_result["group_summary"], use_container_width=True, hide_index=True)
+        if not stat_result.get("posthoc_comparisons", pd.DataFrame()).empty:
+            st.markdown("#### Post-hoc pairwise comparisons (Tukey HSD)")
+            st.dataframe(
+                stat_result["posthoc_comparisons"],
+                use_container_width=True, hide_index=True,
+            )
+            st.caption(
+                "Tukey HSD adjusts pairwise p-values and confidence intervals to control "
+                "the family-wise error rate. It is shown only when Levene's test does not "
+                "indicate unequal variances; it does not replace checking the study design "
+                "or independence assumptions."
+            )
         if not stat_result["contingency"].empty:
             st.markdown("#### Observed contingency table")
             st.dataframe(stat_result["contingency"], use_container_width=True)
@@ -1268,6 +1280,7 @@ with tabs[14]:
         )
     st.caption(
         "This workspace does not verify random sampling, study design, independence, "
-        "measurement validity or pre-registration. It does not perform post-hoc pairwise "
-        "tests or multiple-comparison correction."
+        "measurement validity or pre-registration. Tukey HSD is available after one-way "
+        "ANOVA when the equal-variance assumption is not flagged; other test families "
+        "and repeated-analysis workflows do not receive automatic multiplicity correction."
     )
