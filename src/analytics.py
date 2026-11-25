@@ -293,8 +293,9 @@ def build_cleaning_report(before, after, *, drop_duplicates=False,
                 eligible |= (set(selected) & set(deduplicated.select_dtypes(include=["object", "category", "bool"]).columns))
         elif missing_strategy == "Fill categorical with mode":
             eligible &= set(deduplicated.select_dtypes(include=["object", "category", "bool"]).columns)
-        filled_cells = int(deduplicated[list(eligible)].isna().sum().sum()
-                           - after[list(eligible)].isna().sum().sum()) if eligible else 0
+        eligible &= set(after.columns)
+        filled_cells = int(deduplicated[[c for c in eligible if c in deduplicated.columns]].isna().sum().sum()
+                           - after[[c for c in eligible if c in after.columns]].isna().sum().sum()) if eligible else 0
     elif missing_strategy == "Drop rows with missing values":
         rows_removed_for_missing = max(0, len(deduplicated) - len(after))
 
