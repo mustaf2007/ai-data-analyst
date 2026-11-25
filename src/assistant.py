@@ -147,7 +147,7 @@ def answer_dataset_question(df: pd.DataFrame, question: str) -> dict:
         series = pd.to_numeric(df[measure], errors="coerce").dropna()
         if series.empty:
             return {"answer": f"No valid numeric observations were found in {measure}.", "evidence": pd.DataFrame(), "intent": "numeric"}
-        if group is not None and any(x in low for x in (" by ", "across ", "among ", "per ")):
+        if group is not None and (any(x in low for x in (" by ", "across ", "among ", "per ")) or str(group).casefold() in low):
             work = df[[group, measure]].copy()
             work[measure] = pd.to_numeric(work[measure], errors="coerce")
             work = work.dropna()
