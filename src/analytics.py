@@ -854,7 +854,7 @@ def run_statistical_test(
     if outcome_column not in df.columns:
         raise ValueError("The selected outcome column must exist.")
     if not 0 < float(alpha) < 1:
-        raise ValueError("Alpha must be strictly between 0 and 1.")
+        raise ValueError("alpha must be strictly between 0 and 1.")
 
     warnings = []
     result = {
