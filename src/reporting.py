@@ -43,7 +43,7 @@ def build_pdf_report(
     model_result=None, chart_images=None,
 ):
     """Build a PDF report from selected analysis outputs and user-authored context."""
-    selected = set(sections or [
+    selected = set(sections if sections is not None else [
         "Dataset overview", "Key findings", "Numeric summary",
     ])
     buf = BytesIO()
