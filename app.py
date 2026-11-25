@@ -1329,13 +1329,25 @@ with tabs[16]:
     st.subheader("Ask your data")
     st.caption("A local-first assistant that answers supported questions using calculations on the active dataset. No external AI service or paid API is used.")
     st.markdown("Try: *What is the average sales?* · *Which region has the highest sales?* · *How many missing values?* · *What are the strongest correlations?*")
+    quick_prompts = [
+        ("Dataset size", "How many rows and columns?"),
+        ("Missing values", "How many missing values?"),
+        ("Correlations", "What are the strongest correlations?"),
+        ("Next steps", "What should I do next?"),
+    ]
+    quick_cols = st.columns(4)
+    selected_prompt = None
+    for index, (label, question) in enumerate(quick_prompts):
+        if quick_cols[index].button(label, key=f"chat_quick_{index}", use_container_width=True):
+            selected_prompt = question
     for message in st.session_state.chat_history:
         with st.chat_message(message["role"]):
             st.write(message["content"])
             evidence = message.get("evidence")
             if isinstance(evidence, pd.DataFrame) and not evidence.empty:
                 st.dataframe(evidence, use_container_width=True, hide_index=True)
-    prompt = st.chat_input("Ask a question about your active dataset…", key="dataset_chat_input")
+    typed_prompt = st.chat_input("Ask a question about your active dataset…", key="dataset_chat_input")
+    prompt = typed_prompt or selected_prompt
     if prompt:
         st.session_state.chat_history.append({"role": "user", "content": prompt})
         result = answer_dataset_question(df, prompt, context=st.session_state.chat_context)
