@@ -621,3 +621,140 @@ def forecast_time_series_baseline(series, *, horizon=3, holdout_periods=None):
             "Seasonality, structural breaks and external drivers are not modeled.",
         ],
     }
+
+
+
+def compare_datasets(reference, comparison, *, categorical_limit=30):
+    """Compare two datasets at schema and summary-statistic level without assuming row alignment."""
+    if not isinstance(reference, pd.DataFrame) or not isinstance(comparison, pd.DataFrame):
+        raise ValueError("Both inputs must be pandas DataFrames.")
+    if reference.empty or comparison.empty:
+        raise ValueError("Both datasets must contain at least one data row.")
+    if len(reference.columns) == 0 or len(comparison.columns) == 0:
+        raise ValueError("Both datasets must contain at least one column.")
+    if not isinstance(categorical_limit, int) or categorical_limit < 1:
+        raise ValueError("Categorical limit must be a positive integer.")
+
+    def overview(label, frame):
+        cells = int(frame.shape[0] * frame.shape[1])
+        missing = int(frame.isna().sum().sum())
+        return {
+            "dataset": label,
+            "rows": int(len(frame)),
+            "columns": int(len(frame.columns)),
+            "missing_cells": missing,
+            "missing_pct": round(100 * missing / max(cells, 1), 2),
+            "duplicate_rows": int(frame.duplicated().sum()),
+        }
+
+    reference_columns = list(reference.columns)
+    comparison_columns = list(comparison.columns)
+    shared = [column for column in reference_columns if column in comparison_columns]
+    all_columns = list(dict.fromkeys(reference_columns + comparison_columns))
+    schema_rows = []
+    for column in all_columns:
+        in_reference, in_comparison = column in reference.columns, column in comparison.columns
+        schema_rows.append({
+            "column": str(column),
+            "reference_present": in_reference,
+            "comparison_present": in_comparison,
+            "reference_dtype": str(reference[column].dtype) if in_reference else None,
+            "comparison_dtype": str(comparison[column].dtype) if in_comparison else None,
+            "type_matches": (
+                str(reference[column].dtype) == str(comparison[column].dtype)
+                if in_reference and in_comparison else False
+            ),
+        })
+    schema = pd.DataFrame(schema_rows)
+
+    numeric_rows = []
+    categorical_frames = []
+    warnings = []
+    for column in shared:
+        left, right = reference[column], comparison[column]
+        if pd.api.types.is_numeric_dtype(left) and pd.api.types.is_numeric_dtype(right):
+            left_values = pd.to_numeric(left, errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+            right_values = pd.to_numeric(right, errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+            if left_values.empty or right_values.empty:
+                warnings.append(f"{column}: numeric comparison skipped because one dataset has no finite values.")
+                continue
+            left_mean, right_mean = float(left_values.mean()), float(right_values.mean())
+            mean_delta = right_mean - left_mean
+            numeric_rows.append({
+                "column": str(column),
+                "reference_n": int(len(left_values)),
+                "comparison_n": int(len(right_values)),
+                "reference_mean": left_mean,
+                "comparison_mean": right_mean,
+                "mean_difference": mean_delta,
+                "mean_difference_pct": (
+                    mean_delta / abs(left_mean) * 100 if left_mean != 0 else np.nan
+                ),
+                "reference_median": float(left_values.median()),
+                "comparison_median": float(right_values.median()),
+                "reference_std": float(left_values.std(ddof=1)) if len(left_values) > 1 else np.nan,
+                "comparison_std": float(right_values.std(ddof=1)) if len(right_values) > 1 else np.nan,
+                "reference_min": float(left_values.min()),
+                "comparison_min": float(right_values.min()),
+                "reference_max": float(left_values.max()),
+                "comparison_max": float(right_values.max()),
+            })
+        elif (
+            pd.api.types.is_object_dtype(left)
+            or pd.api.types.is_string_dtype(left)
+            or pd.api.types.is_categorical_dtype(left)
+            or pd.api.types.is_bool_dtype(left)
+        ) and (
+            pd.api.types.is_object_dtype(right)
+            or pd.api.types.is_string_dtype(right)
+            or pd.api.types.is_categorical_dtype(right)
+            or pd.api.types.is_bool_dtype(right)
+        ):
+            left_counts = left.astype("string").fillna("(Missing)").value_counts(dropna=False)
+            right_counts = right.astype("string").fillna("(Missing)").value_counts(dropna=False)
+            categories = list(dict.fromkeys(
+                left_counts.index.tolist() + right_counts.index.tolist()
+            ))
+            if len(categories) > categorical_limit:
+                warnings.append(
+                    f"{column}: categorical distribution skipped ({len(categories)} categories; "
+                    f"limit is {categorical_limit})."
+                )
+                continue
+            left_pct = left_counts / max(len(left), 1) * 100
+            right_pct = right_counts / max(len(right), 1) * 100
+            for category in categories:
+                a_pct = float(left_pct.get(category, 0.0))
+                b_pct = float(right_pct.get(category, 0.0))
+                categorical_frames.append({
+                    "column": str(column),
+                    "category": str(category),
+                    "reference_count": int(left_counts.get(category, 0)),
+                    "comparison_count": int(right_counts.get(category, 0)),
+                    "reference_pct": a_pct,
+                    "comparison_pct": b_pct,
+                    "difference_percentage_points": b_pct - a_pct,
+                })
+
+    numeric = pd.DataFrame(numeric_rows)
+    categorical = pd.DataFrame(categorical_frames)
+    summary = pd.DataFrame([
+        overview("Reference", reference),
+        overview("Comparison", comparison),
+    ])
+    if not shared:
+        warnings.append("The datasets have no shared column names; only dataset-level and schema comparisons are available.")
+    return {
+        "summary": summary,
+        "schema": schema,
+        "numeric": numeric,
+        "categorical": categorical,
+        "shared_columns": shared,
+        "warnings": warnings,
+        "limitations": [
+            "This compares dataset-level summaries and matching column names; it does not assume rows represent the same entities or periods.",
+            "Differences may reflect different coverage, definitions, units, sampling or time windows.",
+            "A percentage difference is unavailable when the reference mean is zero.",
+            "Summary differences are descriptive and do not establish causes or statistical significance.",
+        ],
+    }
