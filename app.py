@@ -1,5 +1,6 @@
 from pathlib import Path
 import hashlib
+import io
 import sys
 
 import numpy as np
@@ -23,6 +24,59 @@ st.title("📊 AI Data Analyst")
 st.caption("Universal Data Intelligence · Local-first analytics · Open-source Python · No paid APIs")
 
 
+def excel_bytes(dataframe):
+    """Return an Excel workbook without writing user data to disk."""
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        dataframe.to_excel(writer, index=False, sheet_name="Analysis data")
+    return output.getvalue()
+
+
+def render_chart_downloads(fig, key):
+    """Offer an interactive HTML export and on-demand static chart exports."""
+    st.download_button(
+        "Download interactive chart (HTML)",
+        data=fig.to_html(full_html=True, include_plotlyjs=True),
+        file_name=f"{key}.html",
+        mime="text/html",
+        key=f"{key}_html_download",
+    )
+    if st.button("Prepare PNG and SVG downloads", key=f"{key}_prepare_static"):
+        try:
+            st.session_state.chart_exports[key] = {
+                "png": fig.to_image(format="png", scale=2),
+                "svg": fig.to_image(format="svg"),
+            }
+            st.success("Static chart files are ready.")
+        except Exception as exc:
+            st.warning(
+                "Static export is unavailable in this environment. "
+                "The interactive HTML download is still available. "
+                f"Export detail: {exc}"
+            )
+    exports = st.session_state.chart_exports.get(key, {})
+    if exports:
+        png_col, svg_col = st.columns(2)
+        png_col.download_button(
+            "Download PNG (2× resolution)", data=exports["png"],
+            file_name=f"{key}.png", mime="image/png",
+            key=f"{key}_png_download",
+        )
+        svg_col.download_button(
+            "Download SVG (vector)", data=exports["svg"],
+            file_name=f"{key}.svg", mime="image/svg+xml",
+            key=f"{key}_svg_download",
+        )
+
+
+def style_chart(fig, template):
+    fig.update_layout(
+        template=template, margin=dict(l=20, r=20, t=55, b=25),
+        title_x=0.02, hovermode="x unified", legend_title_text="",
+    )
+    return fig
+
+
 def initialise_state():
     defaults = {
         "raw": None,
@@ -34,6 +88,7 @@ def initialise_state():
         "model_config": None,
         "anomaly_config": None,
         "cleaning_report": None,
+        "chart_exports": {},
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -62,6 +117,10 @@ initialise_state()
 
 with st.sidebar:
     st.header("Workspace")
+    selected_theme = st.selectbox(
+        "Appearance", ["Light", "Dark", "Green"],
+        index=0, help="Choose the visual theme for charts and the workspace.",
+    )
     upload = st.file_uploader("Upload dataset", type=["csv", "xlsx"])
     reload_upload = st.button("Load selected file", use_container_width=True) if upload is not None else False
     if upload is not None:
@@ -102,25 +161,115 @@ if st.session_state.active is None:
 
 df = st.session_state.active
 p = profile_dataset(df)
+theme_templates = {"Light": "plotly_white", "Dark": "plotly_dark", "Green": "seaborn"}
+theme_template = theme_templates[selected_theme]
+px.defaults.template = theme_template
+theme_css = {
+    "Light": ("#f4f7fb", "#ffffff", "#172b4d", "#64748b"),
+    "Dark": ("#101827", "#182437", "#e5edf8", "#a8b6c9"),
+    "Green": ("#eef6f0", "#ffffff", "#173b2b", "#557363"),
+}
+page_bg, card_bg, text_color, muted_color = theme_css[selected_theme]
+st.markdown(
+    f"""
+    <style>
+    .stApp {{ background: {page_bg}; color: {text_color}; }}
+    [data-testid="stMetric"] {{
+        background: {card_bg}; border: 1px solid rgba(120,140,160,.20);
+        padding: 14px 16px; border-radius: 14px;
+    }}
+    [data-testid="stVerticalBlockBorderWrapper"] {{ border-radius: 14px; }}
+    .block-container {{ padding-top: 1.5rem; }}
+    h1, h2, h3 {{ letter-spacing: -0.025em; }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 tabs = st.tabs([
-    "Overview", "Data quality", "Clean data", "Explore", "Relationships",
-    "Predictive modeling", "Anomalies", "Export & report",
+    "Dashboard", "Data quality", "Clean data", "Explore", "Relationships",
+    "Predictive modeling", "Anomalies", "Export & report", "Chart Studio",
 ])
 
 with tabs[0]:
     st.subheader(st.session_state.source)
+    st.caption("Executive overview · Dataset health · Trends · Key patterns")
     metric_columns = st.columns(5)
-    labels = ["Rows", "Columns", "Missing cells", "Duplicate rows", "Quality score"]
+    labels = ["Records", "Variables", "Missing cells", "Duplicate rows", "Quality score"]
     values = [
         f"{p['rows']:,}", p["columns"], f"{p['missing_cells']:,}",
         f"{p['duplicate_rows']:,}", f"{p['quality_score']:.1f}/100",
     ]
     for column, label, value in zip(metric_columns, labels, values):
         column.metric(label, value)
-    st.markdown("#### Automated observations")
-    for insight in generate_insights(df):
-        st.write("• " + insight)
-    st.dataframe(df.head(100), use_container_width=True)
+
+    insights = generate_insights(df)
+    with st.container(border=True):
+        st.markdown("#### Key findings")
+        if insights:
+            insight_cols = st.columns(min(2, len(insights)))
+            for index, insight in enumerate(insights):
+                insight_cols[index % len(insight_cols)].write("• " + insight)
+        else:
+            st.info("No automated observations are available for this dataset.")
+
+    numeric_dashboard = df.select_dtypes(include=np.number).columns.tolist()
+    time_candidates = infer_datetime_columns(df)
+    year_candidates = [
+        col for col in numeric_dashboard
+        if str(col).strip().lower() in {"year", "yr", "yyyy"}
+    ]
+    time_options = time_candidates + [c for c in year_candidates if c not in time_candidates]
+
+    if numeric_dashboard:
+        st.markdown("#### Dataset at a glance")
+        if time_options:
+            trend_controls = st.columns([1, 2])
+            time_col = trend_controls[0].selectbox(
+                "Time variable", time_options, key="dashboard_time_column"
+            )
+            trend_col = trend_controls[1].selectbox(
+                "Indicator", numeric_dashboard, key="dashboard_trend_measure"
+            )
+            trend_data = df[[time_col, trend_col]].copy()
+            if time_col in time_candidates:
+                trend_data[time_col] = pd.to_datetime(trend_data[time_col], errors="coerce")
+            trend_data = trend_data.dropna(subset=[time_col, trend_col]).sort_values(time_col)
+            trend_fig = px.line(
+                trend_data, x=time_col, y=trend_col, markers=True,
+                title=f"{trend_col} over time",
+            )
+            style_chart(trend_fig, theme_template)
+            st.plotly_chart(trend_fig, use_container_width=True)
+            render_chart_downloads(trend_fig, "dashboard_trend")
+
+        left_chart, right_chart = st.columns(2)
+        distribution_col = left_chart.selectbox(
+            "Distribution variable", numeric_dashboard, key="dashboard_distribution"
+        )
+        distribution_fig = px.histogram(
+            df, x=distribution_col, marginal="box",
+            title=f"Distribution of {distribution_col}",
+        )
+        style_chart(distribution_fig, theme_template)
+        left_chart.plotly_chart(distribution_fig, use_container_width=True)
+        with left_chart:
+            render_chart_downloads(distribution_fig, "dashboard_distribution")
+
+        if len(numeric_dashboard) >= 2:
+            corr = df[numeric_dashboard].corr(numeric_only=True)
+            corr_fig = px.imshow(
+                corr, text_auto=".2f", zmin=-1, zmax=1,
+                color_continuous_scale="RdBu_r", title="Numeric correlation overview",
+            )
+            style_chart(corr_fig, theme_template)
+            right_chart.plotly_chart(corr_fig, use_container_width=True)
+            with right_chart:
+                render_chart_downloads(corr_fig, "dashboard_correlation")
+        else:
+            right_chart.info("Add another numeric variable to display a correlation overview.")
+
+    with st.expander("Preview active dataset"):
+        st.dataframe(df.head(100), use_container_width=True)
 
 with tabs[1]:
     st.caption("The overview quality score is a heuristic, not a certification or full domain-specific audit.")
@@ -366,6 +515,11 @@ with tabs[7]:
         "Download active dataset (CSV)", safe_csv_bytes(df),
         "analysis_dataset.csv", "text/csv",
     )
+    st.download_button(
+        "Download active dataset (Excel)", data=excel_bytes(df),
+        file_name="analysis_dataset.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
     try:
         pdf = build_pdf_report(
             st.session_state.source, df, p, numeric_summary(df), generate_insights(df)
@@ -376,6 +530,56 @@ with tabs[7]:
     except Exception as exc:
         st.error(f"PDF report could not be generated: {exc}")
     st.caption("PDF includes dataset metrics, observations and numeric summary; it does not embed charts.")
+    st.info("Use Chart Studio to build and export individual charts. Interactive HTML is available directly; PNG/SVG exports are prepared on demand.")
+
+with tabs[8]:
+    st.subheader("Chart Studio")
+    st.caption("Build a chart from the active dataset, customize its appearance, and export it.")
+    numeric_columns = df.select_dtypes(include=np.number).columns.tolist()
+    all_columns = df.columns.tolist()
+    if not all_columns:
+        st.info("The active dataset has no columns to visualize.")
+    else:
+        controls = st.columns(3)
+        chart_kind = controls[0].selectbox(
+            "Chart type", ["Line", "Bar", "Scatter", "Area", "Histogram", "Box", "Violin"]
+        )
+        x_column = controls[1].selectbox("X variable", all_columns)
+        y_options = numeric_columns or all_columns
+        y_column = controls[2].selectbox(
+            "Y variable", y_options, disabled=chart_kind == "Histogram"
+        )
+        color_options = ["None"] + all_columns
+        color_column = st.selectbox("Color / group by (optional)", color_options)
+        chart_title = st.text_input("Chart title", value=f"{chart_kind}: {y_column} by {x_column}")
+        chart_height = st.slider("Chart height", 350, 850, 520, 50)
+
+        color_arg = None if color_column == "None" else color_column
+        try:
+            if chart_kind == "Line":
+                chart_fig = px.line(df, x=x_column, y=y_column, color=color_arg, markers=True, title=chart_title)
+            elif chart_kind == "Bar":
+                chart_fig = px.bar(df, x=x_column, y=y_column, color=color_arg, title=chart_title)
+            elif chart_kind == "Scatter":
+                has_numeric_xy = pd.api.types.is_numeric_dtype(df[x_column]) and pd.api.types.is_numeric_dtype(df[y_column])
+                chart_fig = px.scatter(
+                    df, x=x_column, y=y_column, color=color_arg, title=chart_title,
+                    trendline="ols" if len(df) >= 3 and has_numeric_xy else None,
+                )
+            elif chart_kind == "Area":
+                chart_fig = px.area(df, x=x_column, y=y_column, color=color_arg, title=chart_title)
+            elif chart_kind == "Histogram":
+                chart_fig = px.histogram(df, x=x_column, color=color_arg, marginal="box", title=chart_title)
+            elif chart_kind == "Box":
+                chart_fig = px.box(df, x=x_column, y=y_column, color=color_arg, title=chart_title)
+            else:
+                chart_fig = px.violin(df, x=x_column, y=y_column, color=color_arg, box=True, points="outliers", title=chart_title)
+            style_chart(chart_fig, theme_template)
+            chart_fig.update_layout(height=chart_height)
+            st.plotly_chart(chart_fig, use_container_width=True)
+            render_chart_downloads(chart_fig, "chart_studio_output")
+        except Exception as exc:
+            st.error(f"Could not create this chart with the selected variables: {exc}")
 
 st.divider()
-st.caption("AI Data Analyst v1.0 · Local session processing · Correlation is not causation.")
+st.caption("AI Data Analyst v1.1 · Local session processing · Correlation is not causation.")
