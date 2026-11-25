@@ -58,21 +58,34 @@ def column_profile(df):
       "unique":int(df[c].nunique()),"sample":" | ".join(df[c].dropna().astype(str).head(3))}
       for c in df.columns])
 
-def clean_dataset(df, *, drop_duplicates=False, missing_strategy="Keep as-is", selected_columns=None):
+def clean_dataset(df, *, drop_duplicates=False, drop_empty_columns=False,
+                  missing_strategy="Keep as-is", selected_columns=None):
     out=df.copy()
-    if drop_duplicates: out=out.drop_duplicates()
+    if drop_duplicates:
+        out=out.drop_duplicates()
+    if drop_empty_columns:
+        out=out.dropna(axis=1, how="all")
     cols=selected_columns or out.columns.tolist()
-    if missing_strategy=="Drop rows with missing values": out=out.dropna(subset=cols)
-    elif missing_strategy.startswith("Fill numeric"):
-        method=missing_strategy.replace("Fill numeric with ","")
+    if missing_strategy=="Drop rows with missing values":
+        out=out.dropna(subset=[c for c in cols if c in out.columns])
+    elif missing_strategy in {"Fill numeric with median", "Fill numeric with mean", "Fill numeric with zero",
+                              "Fill numeric with median and categorical with mode"}:
+        method="median" if "median" in missing_strategy else "mean" if "mean" in missing_strategy else "zero"
         for c in out.select_dtypes(include=np.number):
             if c in cols:
                 v=out[c].median() if method=="median" else out[c].mean() if method=="mean" else 0
-                if pd.notna(v): out[c]=out[c].fillna(v)
+                if pd.notna(v):
+                    out[c]=out[c].fillna(v)
+        if missing_strategy=="Fill numeric with median and categorical with mode":
+            for c in out.select_dtypes(include=["object","category","bool"]):
+                if c in cols and not out[c].mode().empty:
+                    out[c]=out[c].fillna(out[c].mode().iloc[0])
     elif missing_strategy=="Fill categorical with mode":
         for c in out.select_dtypes(include=["object","category","bool"]):
-            if c in cols and not out[c].mode().empty: out[c]=out[c].fillna(out[c].mode().iloc[0])
-    elif missing_strategy!="Keep as-is": raise ValueError("Unknown missing-value strategy.")
+            if c in cols and not out[c].mode().empty:
+                out[c]=out[c].fillna(out[c].mode().iloc[0])
+    elif missing_strategy!="Keep as-is":
+        raise ValueError("Unknown missing-value strategy.")
     return out
 
 
@@ -276,6 +289,8 @@ def build_cleaning_report(before, after, *, drop_duplicates=False,
         eligible = set(selected)
         if missing_strategy.startswith("Fill numeric"):
             eligible &= set(deduplicated.select_dtypes(include=np.number).columns)
+            if missing_strategy == "Fill numeric with median and categorical with mode":
+                eligible |= (set(selected) & set(deduplicated.select_dtypes(include=["object", "category", "bool"]).columns))
         elif missing_strategy == "Fill categorical with mode":
             eligible &= set(deduplicated.select_dtypes(include=["object", "category", "bool"]).columns)
         filled_cells = int(deduplicated[list(eligible)].isna().sum().sum()
