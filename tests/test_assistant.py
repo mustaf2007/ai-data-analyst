@@ -57,3 +57,28 @@ def test_chatbot_handles_correlations_and_unsupported_questions():
     assert result["evidence"].iloc[0]["correlation"] > 0.99
     unsupported = answer_dataset_question(df, "Write me a poem")
     assert unsupported["intent"] == "unsupported"
+
+
+def test_chatbot_follow_up_reuses_previous_measure_and_group():
+    df = pd.DataFrame({
+        "region": ["North", "North", "South", "South"],
+        "sales": [10, 20, 50, 60],
+    })
+    first = answer_dataset_question(df, "Which region has the highest sales?")
+    follow_up = answer_dataset_question(df, "What about North?", context=first["context"])
+    assert first["context"] == {"measure": "sales", "group": "region"}
+    assert follow_up["intent"] == "group_follow_up"
+    assert "North" in follow_up["answer"]
+    assert follow_up["evidence"].iloc[0]["value"] == 15
+
+
+def test_chatbot_follow_up_can_change_grouped_statistic():
+    df = pd.DataFrame({
+        "region": ["North", "North", "South", "South"],
+        "sales": [10, 20, 50, 60],
+    })
+    first = answer_dataset_question(df, "Which region has the highest sales?")
+    follow_up = answer_dataset_question(df, "What about median?", context=first["context"])
+    assert follow_up["intent"] == "grouped"
+    assert "median" in follow_up["answer"].lower()
+    assert set(follow_up["evidence"]["median"]) == {15, 55}
