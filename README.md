@@ -7,10 +7,10 @@ A local-first data analysis workspace built with Python, Streamlit and open-sour
 ## Current capabilities
 
 - **Upload & preview:** CSV and XLSX, file-size and dataset-shape safeguards, duplicate column-name normalization.
-- **Overview:** dataset dimensions, memory footprint, type counts, missingness and sample preview.
-- **Data quality:** column-level completeness, missingness, unique counts, duplicate rows, constant-column checks and a transparent heuristic score.
+- **Overview:** dataset dimensions, missingness, duplicate-row count, heuristic quality score, automated observations and data preview.
+- **Data quality:** column-level data types, non-null counts, missingness, unique counts and sample values.
 - **Cleaning:** remove duplicate rows; drop rows with missing values; impute numeric values with median, mean or zero; impute categorical values with mode. Original upload remains available for reset.
-- **Exploration:** numeric descriptive statistics, categorical frequency tables, histograms, box plots and grouped aggregations.
+- **Exploration:** numeric descriptive statistics, categorical frequency tables, histograms, box plots, grouped aggregations and date trends with selectable aggregation.
 - **Relationships:** Pearson, Spearman and Kendall correlation matrices plus strongest pairwise associations.
 - **Predictive modeling:** local Random Forest regression/classification baseline with hold-out metrics and actual-vs-predicted comparison.
 - **Anomaly detection:** local Isolation Forest with configurable expected anomaly share.
@@ -25,7 +25,7 @@ Python 3.11 or 3.12 is recommended.
 git clone https://github.com/mustaf2007/ai-data-analyst.git
 cd ai-data-analyst
 python -m venv .venv
-# Windows PowerShell: .venv\Scripts\Activate.ps1
+# Windows PowerShell: .venv\\Scripts\\Activate.ps1
 # macOS/Linux: source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements-dev.txt
@@ -76,6 +76,7 @@ src/
 tests/
   test_analytics.py
   test_modeling.py
+  test_reporting.py
 sample_data/
   sample_business_data.csv
 .streamlit/config.toml
