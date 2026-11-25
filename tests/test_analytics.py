@@ -359,3 +359,33 @@ def test_time_series_rejects_invalid_columns_and_frequency():
         build_time_series_analysis(df, "missing", "value")
     with pytest.raises(ValueError, match="Frequency"):
         build_time_series_analysis(df, "date", "value", frequency="D")
+
+
+
+def test_baseline_forecast_uses_chronological_holdout_and_last_value():
+    from analytics import forecast_time_series_baseline
+    result = forecast_time_series_baseline(
+        pd.Series([10, 12, 11, 13, 15, 14, 16, 18, 17, 19]),
+        horizon=3,
+    )
+    assert result["metrics"]["training_periods"] == 8
+    assert result["metrics"]["holdout_periods"] == 2
+    assert result["validation"]["actual"].tolist() == [17.0, 19.0]
+    assert result["validation"]["predicted"].tolist() == [18.0, 18.0]
+    assert result["forecast"]["forecast"].tolist() == [19.0, 19.0, 19.0]
+    assert result["metrics"]["mae"] == pytest.approx(1.0)
+
+
+def test_baseline_forecast_rejects_short_series_and_invalid_horizon():
+    from analytics import forecast_time_series_baseline
+    with pytest.raises(ValueError, match="eight observed periods"):
+        forecast_time_series_baseline([1, 2, 3, 4, 5, 6, 7], horizon=2)
+    with pytest.raises(ValueError, match="from 1 to 12"):
+        forecast_time_series_baseline(range(1, 10), horizon=13)
+
+
+def test_baseline_forecast_handles_zero_values_in_smape():
+    from analytics import forecast_time_series_baseline
+    result = forecast_time_series_baseline([0, 0, 0, 0, 0, 0, 0, 0], horizon=1)
+    assert result["metrics"]["smape_pct"] == 0.0
+    assert np.isfinite(result["metrics"]["mae"])
