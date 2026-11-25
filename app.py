@@ -12,7 +12,7 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from analytics import (
-    DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset, build_time_series_analysis, forecast_time_series_baseline, compare_datasets,
+    DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset, build_time_series_analysis, forecast_time_series_baseline, compare_datasets, build_geographic_summary,
     numeric_summary, categorical_summary, correlation_matrix, grouped_summary,
     infer_datetime_columns, generate_insights, generate_detailed_insights, build_data_story, safe_csv_bytes, build_cleaning_report, validate_analysis_readiness, column_quality_diagnostics,
 )
@@ -227,7 +227,7 @@ st.markdown(
 )
 tabs = st.tabs([
     "Dashboard", "Data quality", "Clean data", "Explore", "Relationships",
-    "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights", "Data story", "Time-series intelligence", "Dataset comparison",
+    "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights", "Data story", "Time-series intelligence", "Dataset comparison", "Geographic intelligence",
 ])
 
 with tabs[0]:
@@ -1028,3 +1028,96 @@ with tabs[12]:
                 safe_csv_bytes(result["categorical"]), "categorical_comparison.csv",
                 "text/csv", key="download_dataset_comparison_categorical",
             )
+
+
+
+with tabs[13]:
+    st.subheader("Geographic & Regional Intelligence")
+    st.caption(
+        "Aggregate and rank a numeric indicator across the geographic labels present in your dataset. "
+        "Choose the geographic level and measure explicitly."
+    )
+    geo_candidates = [
+        col for col in df.columns
+        if not pd.api.types.is_numeric_dtype(df[col])
+        and df[col].nunique(dropna=True) > 0
+    ]
+    geo_numeric = df.select_dtypes(include=np.number).columns.tolist()
+    if not geo_candidates:
+        st.info("No non-numeric geographic/category field was found. Add a country, region, state, district or other location label.")
+    elif not geo_numeric:
+        st.info("No numeric indicator is available for geographic aggregation.")
+    else:
+        geo_controls = st.columns([1.4, 1.4, 1, 1])
+        geo_column = geo_controls[0].selectbox(
+            "Geographic field", geo_candidates, key="geo_field"
+        )
+        geo_measure = geo_controls[1].selectbox(
+            "Numeric indicator", geo_numeric, key="geo_measure"
+        )
+        geo_aggregation = geo_controls[2].selectbox(
+            "Aggregation", ["sum", "mean", "median", "min", "max"],
+            key="geo_aggregation",
+        )
+        geo_top_n = geo_controls[3].selectbox(
+            "Show top", [10, 20, 25, 50, 100], index=2, key="geo_top_n"
+        )
+        try:
+            geo_result = build_geographic_summary(
+                df, geo_column, geo_measure,
+                aggregation=geo_aggregation, top_n=geo_top_n,
+            )
+            coverage = geo_result["coverage"]
+            geo_kpis = st.columns(4)
+            geo_kpis[0].metric("Geographic groups", f"{coverage['geographic_groups']:,}")
+            geo_kpis[1].metric("Included records", f"{coverage['included_rows']:,}")
+            geo_kpis[2].metric("Excluded records", f"{coverage['excluded_rows']:,}")
+            geo_kpis[3].metric("Aggregation", geo_aggregation.title())
+
+            geo_data = geo_result["data"]
+            st.markdown("#### Geographic ranking")
+            st.dataframe(geo_data, use_container_width=True, hide_index=True)
+            chart_title = f"{geo_measure} by {geo_column} ({geo_aggregation})"
+            geo_fig = px.bar(
+                geo_data.sort_values("value", ascending=True),
+                x="value", y="geography", orientation="h",
+                title=chart_title, hover_data=["rank", "observations"],
+                labels={"value": geo_measure, "geography": geo_column},
+            )
+            style_chart(geo_fig, theme_template)
+            st.plotly_chart(geo_fig, use_container_width=True)
+            render_chart_downloads(geo_fig, "geographic_ranking")
+
+            st.markdown("#### Coverage and interpretation")
+            st.caption(
+                f"Input: {coverage['input_rows']:,} rows · "
+                f"Included: {coverage['included_rows']:,} · "
+                f"Geographic field: {coverage['geographic_field']} · "
+                f"Indicator: {coverage['measure']}"
+            )
+            for warning in geo_result["warnings"]:
+                st.warning(warning)
+            with st.expander("Methodology and limitations", expanded=False):
+                for limitation in geo_result["limitations"]:
+                    st.write("• " + limitation)
+
+            geo_csv = safe_csv_bytes(geo_result["all_data"])
+            geo_excel = excel_bytes(geo_result["all_data"])
+            geo_downloads = st.columns(2)
+            geo_downloads[0].download_button(
+                "Download full geographic results (CSV)", geo_csv,
+                "geographic_summary.csv", "text/csv",
+                key="download_geographic_csv",
+            )
+            geo_downloads[1].download_button(
+                "Download full geographic results (Excel)", geo_excel,
+                "geographic_summary.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="download_geographic_excel",
+            )
+            st.caption(
+                "Map-ready output is provided as a geographic ranking table. "
+                "A reliable map requires standardized geographic codes, coordinates or a verified boundary dataset."
+            )
+        except ValueError as exc:
+            st.warning(f"Geographic analysis could not be completed: {exc}")
