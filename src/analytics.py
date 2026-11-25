@@ -458,3 +458,97 @@ def build_data_story(findings, *, title="Data analysis brief", audience="General
         "4. Compare results with independent sources before using them to guide policy or operational decisions.",
     ])
     return "\n".join(lines)
+
+
+def build_time_series_analysis(
+    df, date_column, value_column, *, frequency="MS", aggregation="sum",
+    moving_average_window=3,
+):
+    """Aggregate a numeric measure over time and calculate transparent trend diagnostics."""
+    if date_column not in df.columns or value_column not in df.columns:
+        raise ValueError("Select date and measure columns that exist in the dataset.")
+    if date_column == value_column:
+        raise ValueError("Date and measure columns must be different.")
+    if frequency not in {"MS", "QS", "YS"}:
+        raise ValueError("Frequency must be month, quarter or year.")
+    if aggregation not in {"sum", "mean", "median", "count"}:
+        raise ValueError("Unsupported aggregation method.")
+    if not isinstance(moving_average_window, (int, np.integer)) or moving_average_window < 2:
+        raise ValueError("Moving-average window must be an integer of at least 2.")
+
+    dates = pd.to_datetime(df[date_column], errors="coerce")
+    values = pd.to_numeric(df[value_column], errors="coerce")
+    valid = dates.notna() & values.notna() & np.isfinite(values)
+    working = pd.DataFrame({"period": dates[valid], "value": values[valid]})
+    warnings = []
+    if len(working) < 2:
+        raise ValueError("At least two valid date-and-measure observations are required.")
+
+    grouped = working.set_index("period").resample(frequency)["value"]
+    if aggregation == "count":
+        result = grouped.count()
+    else:
+        result = getattr(grouped, aggregation)()
+    result = result.dropna().sort_index()
+    result = result[result.index.notna()]
+    if len(result) < 2:
+        raise ValueError("The selected frequency produces fewer than two non-empty periods.")
+
+    output = pd.DataFrame({
+        "period": result.index,
+        "value": result.to_numpy(dtype=float),
+    })
+    output["period_change"] = output["value"].diff()
+    previous = output["value"].shift(1)
+    output["period_change_pct"] = np.where(
+        previous.ne(0), output["period_change"] / previous.abs() * 100, np.nan
+    )
+    output["moving_average"] = output["value"].rolling(
+        window=moving_average_window, min_periods=moving_average_window
+    ).mean()
+
+    x = np.arange(len(output), dtype=float)
+    slope = float(np.polyfit(x, output["value"].to_numpy(dtype=float), 1)[0])
+    if slope > 0:
+        direction = "Increasing"
+    elif slope < 0:
+        direction = "Decreasing"
+    else:
+        direction = "No linear change"
+    output["trend_line"] = np.polyval(
+        np.polyfit(x, output["value"].to_numpy(dtype=float), 1), x
+    )
+
+    output["unusual_change"] = False
+    changes = output["period_change"].dropna()
+    if len(output) >= 6 and len(changes) >= 5:
+        q1, q3 = changes.quantile([0.25, 0.75])
+        iqr = float(q3 - q1)
+        if iqr > 0:
+            lower, upper = float(q1 - 1.5 * iqr), float(q3 + 1.5 * iqr)
+            output.loc[output["period_change"].notna(), "unusual_change"] = (
+                (output.loc[output["period_change"].notna(), "period_change"] < lower)
+                | (output.loc[output["period_change"].notna(), "period_change"] > upper)
+            )
+        else:
+            warnings.append("Unusual-change flags were not calculated because period changes have no IQR spread.")
+    else:
+        warnings.append("At least six aggregated periods are required before unusual-change flags are assessed.")
+
+    if output["period_change_pct"].isna().any():
+        warnings.append("Percentage change is unavailable where the previous period is zero or missing.")
+    if len(working) < len(df):
+        warnings.append(f"{len(df) - len(working):,} rows were excluded because the date or measure was invalid or missing.")
+    if len(output) < moving_average_window:
+        warnings.append("There are too few periods to calculate the selected moving average.")
+
+    summary = {
+        "periods": int(len(output)),
+        "observations": int(len(working)),
+        "aggregation": aggregation,
+        "frequency": frequency,
+        "trend_direction": direction,
+        "trend_slope_per_period": slope,
+        "unusual_periods": int(output["unusual_change"].sum()),
+    }
+    return {"data": output, "summary": summary, "warnings": warnings}
