@@ -575,3 +575,30 @@ def test_statistical_test_rejects_zero_variance_and_sparse_chi_square_is_flagged
     })
     result = run_statistical_test(sparse, "Chi-square test of independence", "a", group_column="b")
     assert any("expected cell counts" in warning for warning in result["warnings"])
+
+
+def test_anova_runs_tukey_hsd_with_adjusted_pairwise_results():
+    from analytics import run_statistical_test
+    df = pd.DataFrame({
+        "group": ["A"] * 5 + ["B"] * 5 + ["C"] * 5,
+        "value": [1, 2, 3, 4, 5, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14],
+    })
+    result = run_statistical_test(df, "One-way ANOVA", "value", group_column="group")
+    pairwise = result["posthoc_comparisons"]
+    assert len(pairwise) == 3
+    assert {"group_1", "group_2", "mean_difference", "ci_lower", "ci_upper",
+            "adjusted_p_value", "significant"}.issubset(pairwise.columns)
+    assert pairwise["adjusted_p_value"].between(0, 1).all()
+    assert pairwise["significant"].any()
+
+
+def test_anova_skips_tukey_when_variances_are_unequal():
+    from analytics import run_statistical_test
+    df = pd.DataFrame({
+        "group": ["A"] * 6 + ["B"] * 6 + ["C"] * 6,
+        "value": [0, 0, 0, 0, 0, 100, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2],
+    })
+    result = run_statistical_test(df, "One-way ANOVA", "value", group_column="group")
+    assert result["posthoc_comparisons"].empty
+    assert any("Tukey HSD pairwise comparisons were not run" in warning
+               for warning in result["warnings"])
