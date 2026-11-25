@@ -82,3 +82,15 @@ def test_chatbot_follow_up_can_change_grouped_statistic():
     assert follow_up["intent"] == "grouped"
     assert "median" in follow_up["answer"].lower()
     assert set(follow_up["evidence"]["median"]) == {15, 55}
+
+
+def test_chatbot_can_recommend_next_analysis_steps():
+    df = pd.DataFrame({
+        "sales": [10, None, 30],
+        "cost": [4, 5, 8],
+        "region": ["North", "South", "North"],
+    })
+    result = answer_dataset_question(df, "What should I do next?")
+    assert result["intent"] == "recommendations"
+    assert not result["evidence"].empty
+    assert "Review missing values" in result["evidence"]["title"].tolist()
