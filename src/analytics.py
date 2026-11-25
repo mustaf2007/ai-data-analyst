@@ -629,7 +629,7 @@ def compare_datasets(reference, comparison, *, categorical_limit=30):
     if not isinstance(reference, pd.DataFrame) or not isinstance(comparison, pd.DataFrame):
         raise ValueError("Both inputs must be pandas DataFrames.")
     if reference.empty or comparison.empty:
-        raise ValueError("Both datasets must contain at least one data row.")
+        raise ValueError("both datasets must contain at least one data row.")
     if len(reference.columns) == 0 or len(comparison.columns) == 0:
         raise ValueError("Both datasets must contain at least one column.")
     if not isinstance(categorical_limit, int) or categorical_limit < 1:
