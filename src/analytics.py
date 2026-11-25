@@ -64,7 +64,17 @@ def clean_dataset(df, *, drop_duplicates=False, drop_empty_columns=False,
     if drop_duplicates:
         out=out.drop_duplicates()
     if drop_empty_columns:
-        out=out.dropna(axis=1, how="all")
+        # Treat nulls and whitespace-only strings as empty; preserve columns
+        # containing any substantive value, even when their header is "Unnamed".
+        empty_columns = [
+            c for c in out.columns
+            if out[c].isna().all()
+            or (
+                (pd.api.types.is_object_dtype(out[c]) or pd.api.types.is_string_dtype(out[c]))
+                and out[c].dropna().astype(str).str.strip().eq("").all()
+            )
+        ]
+        out = out.drop(columns=empty_columns)
     cols=selected_columns or out.columns.tolist()
     if missing_strategy=="Drop rows with missing values":
         out=out.dropna(subset=[c for c in cols if c in out.columns])
@@ -304,7 +314,8 @@ def build_cleaning_report(before, after, *, drop_duplicates=False,
     per_column = pd.DataFrame({
         "column": before.columns.astype(str),
         "missing_before": [int(before[c].isna().sum()) for c in before.columns],
-        "missing_after": [int(after[c].isna().sum()) for c in after.columns],
+        "missing_after": [int(after[c].isna().sum()) if c in after.columns else 0 for c in before.columns],
+        "column_removed": [c not in after.columns for c in before.columns],
     })
     per_column["missing_resolved"] = per_column["missing_before"] - per_column["missing_after"]
 
