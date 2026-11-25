@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from analytics import (
     DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset,
     numeric_summary, categorical_summary, correlation_matrix, grouped_summary,
-    infer_datetime_columns, generate_insights, safe_csv_bytes, build_cleaning_report, validate_analysis_readiness,
+    infer_datetime_columns, generate_insights, safe_csv_bytes, build_cleaning_report, validate_analysis_readiness, column_quality_diagnostics,
 )
 from modeling import train_predictive_model, detect_anomalies
 from reporting import build_pdf_report
@@ -123,8 +123,16 @@ with tabs[0]:
     st.dataframe(df.head(100), use_container_width=True)
 
 with tabs[1]:
-    st.caption("The quality score is a heuristic, not a certification or full domain-specific audit.")
-    readiness = validate_analysis_readiness(df)
+    st.caption("The overview quality score is a heuristic, not a certification or full domain-specific audit.")
+    analysis_type = st.selectbox(
+        "What do you plan to do with this dataset?",
+        ["General exploratory analysis", "Correlation analysis", "Regression",
+         "Classification", "Time-series analysis"],
+    )
+    target_column = None
+    if analysis_type in {"Regression", "Classification"}:
+        target_column = st.selectbox("Select target variable", df.columns.tolist())
+    readiness = validate_analysis_readiness(df, analysis_type, target_column)
     st.markdown("#### Analysis-readiness validation")
     readiness_cols = st.columns(4)
     readiness_cols[0].metric("Readiness status", readiness["status"])
@@ -132,13 +140,18 @@ with tabs[1]:
     readiness_cols[2].metric("Checks passed", f'{readiness["passed"]}/{readiness["total"]}')
     readiness_cols[3].metric("Issues to review", readiness["blockers"] + readiness["warnings"])
     if readiness["status"] == "Ready":
-        st.success("The dataset passed all general-purpose validation checks and is ready for exploratory analysis.")
+        st.success(f"The dataset passed the selected {analysis_type.lower()} checklist.")
     elif readiness["status"] == "Ready with warnings":
-        st.warning("The dataset can be explored, but review the outstanding quality warnings before relying on results.")
+        st.warning("The selected analysis can proceed cautiously, but review the warnings below.")
     else:
-        st.error("The dataset has blocking issues that should be corrected before analysis.")
-    st.caption("The checklist score measures only these generic checks. It is not a guarantee of suitability for a particular research question, model, or statistical method.")
+        st.error("The dataset has blocking issues for the selected analysis. Address them before proceeding.")
+    st.caption("The percentage is the share of checks passed for the selected workflow. It is not a universal certification; suitability still depends on research design, sampling, measurement, assumptions and domain rules.")
     st.dataframe(readiness["checks"][["check", "status", "detail"]], use_container_width=True, hide_index=True)
+
+    st.markdown("#### Column-level diagnostics")
+    diagnostics = column_quality_diagnostics(df)
+    st.dataframe(diagnostics, use_container_width=True, hide_index=True)
+    st.caption("Missingness bands: none = 0%; low = up to 5%; moderate = over 5% to 20%; high = over 20%. Investigate the reason and pattern of missingness before choosing an imputation method.")
     st.dataframe(column_profile(df), use_container_width=True)
     st.write("Missing values by column")
     if p["missing_by_column"].empty:
