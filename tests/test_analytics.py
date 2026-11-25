@@ -596,7 +596,7 @@ def test_anova_skips_tukey_when_variances_are_unequal():
     from analytics import run_statistical_test
     df = pd.DataFrame({
         "group": ["A"] * 6 + ["B"] * 6 + ["C"] * 6,
-        "value": [0, 0, 0, 0, 0, 100, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2],
+        "value": [-100, -100, -100, 100, 100, 100, -1, -1, -1, 1, 1, 1, -2, -2, -2, 2, 2, 2],
     })
     result = run_statistical_test(df, "One-way ANOVA", "value", group_column="group")
     assert result["posthoc_comparisons"].empty
