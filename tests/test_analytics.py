@@ -300,3 +300,62 @@ def test_data_story_handles_empty_selection():
     from analytics import build_data_story
     story = build_data_story([], title="Empty brief")
     assert "No supported findings were selected" in story
+
+
+
+def test_time_series_monthly_aggregation_sorts_and_calculates_changes():
+    from analytics import build_time_series_analysis
+    df = pd.DataFrame({
+        "date": ["2024-03-10", "2024-01-10", "2024-01-20", "2024-02-10"],
+        "value": [7, 2, 3, 5],
+    })
+    result = build_time_series_analysis(
+        df, "date", "value", frequency="MS", aggregation="sum",
+        moving_average_window=2,
+    )
+    data = result["data"]
+    assert data["value"].tolist() == [5.0, 5.0, 7.0]
+    assert data["period_change"].iloc[1] == pytest.approx(0.0)
+    assert data["moving_average"].iloc[1] == pytest.approx(5.0)
+    assert data["period"].is_monotonic_increasing
+    assert result["summary"]["periods"] == 3
+
+
+def test_time_series_zero_previous_period_has_no_infinite_percentage():
+    from analytics import build_time_series_analysis
+    df = pd.DataFrame({
+        "date": pd.date_range("2024-01-01", periods=3, freq="MS"),
+        "value": [0, 4, 8],
+    })
+    result = build_time_series_analysis(df, "date", "value", frequency="MS")
+    pct = result["data"]["period_change_pct"]
+    assert pd.isna(pct.iloc[1])
+    assert pct.iloc[2] == pytest.approx(100.0)
+    assert any("previous period is zero" in warning for warning in result["warnings"])
+
+
+def test_time_series_requires_two_aggregated_periods():
+    from analytics import build_time_series_analysis
+    df = pd.DataFrame({"date": ["2024-01-01", "2024-01-15"], "value": [1, 2]})
+    with pytest.raises(ValueError, match="fewer than two"):
+        build_time_series_analysis(df, "date", "value", frequency="YS")
+
+
+def test_time_series_unusual_change_detection_requires_six_periods():
+    from analytics import build_time_series_analysis
+    df = pd.DataFrame({
+        "date": pd.date_range("2024-01-01", periods=4, freq="MS"),
+        "value": [1, 2, 3, 4],
+    })
+    result = build_time_series_analysis(df, "date", "value")
+    assert not result["data"]["unusual_change"].any()
+    assert any("six aggregated periods" in warning for warning in result["warnings"])
+
+
+def test_time_series_rejects_invalid_columns_and_frequency():
+    from analytics import build_time_series_analysis
+    df = pd.DataFrame({"date": ["2024-01-01", "2024-02-01"], "value": [1, 2]})
+    with pytest.raises(ValueError, match="exist"):
+        build_time_series_analysis(df, "missing", "value")
+    with pytest.raises(ValueError, match="Frequency"):
+        build_time_series_analysis(df, "date", "value", frequency="D")
