@@ -864,6 +864,7 @@ def run_statistical_test(
         "p_value": np.nan, "degrees_of_freedom": None,
         "effect_size_name": None, "effect_size": np.nan,
         "confidence_interval": None, "group_summary": pd.DataFrame(),
+        "posthoc_comparisons": pd.DataFrame(),
         "contingency": pd.DataFrame(), "expected_frequencies": pd.DataFrame(),
         "warnings": warnings,
     }
@@ -973,8 +974,27 @@ def run_statistical_test(
                 ss_total = float(((work["_value"] - grand_mean) ** 2).sum())
                 eta_squared = ss_between / ss_total if ss_total > 0 else np.nan
                 levene = stats.levene(*(arr for _, arr in grouped), center="median")
-                if np.isfinite(levene.pvalue) and levene.pvalue < alpha:
-                    warnings.append("Levene's test suggests unequal group variances; classical one-way ANOVA may be unreliable. Consider Welch ANOVA or a robust alternative.")
+                unequal_variances = np.isfinite(levene.pvalue) and levene.pvalue < alpha
+                if unequal_variances:
+                    warnings.append("Levene's test suggests unequal group variances; classical one-way ANOVA may be unreliable. Consider Welch ANOVA or a robust alternative. Tukey HSD pairwise comparisons were not run because their equal-variance assumption is questionable.")
+                else:
+                    # Tukey HSD controls the family-wise error rate across all pairwise
+                    # comparisons, under the equal-variance independent-groups model.
+                    tukey = stats.tukey_hsd(*(arr for _, arr in grouped))
+                    intervals = tukey.confidence_interval(confidence_level=1 - alpha)
+                    pairwise_rows = []
+                    for i in range(len(grouped)):
+                        for j in range(i + 1, len(grouped)):
+                            pairwise_rows.append({
+                                "group_1": grouped[i][0],
+                                "group_2": grouped[j][0],
+                                "mean_difference": float(np.mean(grouped[i][1]) - np.mean(grouped[j][1])),
+                                "ci_lower": float(intervals.low[i, j]),
+                                "ci_upper": float(intervals.high[i, j]),
+                                "adjusted_p_value": float(tukey.pvalue[i, j]),
+                                "significant": bool(tukey.pvalue[i, j] < alpha),
+                            })
+                    result["posthoc_comparisons"] = pd.DataFrame(pairwise_rows)
                 result.update({
                     "statistic": float(test.statistic), "p_value": float(test.pvalue),
                     "degrees_of_freedom": [len(grouped) - 1, result["n"] - len(grouped)],
