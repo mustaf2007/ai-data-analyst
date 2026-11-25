@@ -3,7 +3,7 @@ import pytest
 from analytics import (
     DataInputError, clean_dataset, load_dataset, profile_dataset, safe_csv_bytes,
     categorical_summary, correlation_matrix, grouped_summary, infer_datetime_columns,
-    build_cleaning_report,
+    build_cleaning_report, validate_analysis_readiness, column_quality_diagnostics,
 )
 
 
@@ -142,3 +142,44 @@ def test_analysis_readiness_blocks_infinite_numeric_values():
     assert result["checks"].loc[
         result["checks"]["check"] == "No infinite numeric values", "status"
     ].iloc[0] == "Blocked"
+
+
+
+def test_column_diagnostics_classifies_missingness_and_flags_headers_and_numeric_text():
+    df = pd.DataFrame({
+        "Unnamed: 2": [1, None, None, None, None],
+        "amount_text": ["10", "20", "30", "40", None],
+    })
+    result = column_quality_diagnostics(df).set_index("column")
+    assert result.loc["Unnamed: 2", "missingness_level"] == "High"
+    assert result.loc["Unnamed: 2", "header_review"] == "Review name"
+    assert result.loc["amount_text", "type_review"] == "Possibly numeric stored as text"
+
+
+def test_correlation_readiness_requires_two_numeric_columns():
+    df = pd.DataFrame({"amount": [1, 2, 3], "label": ["a", "b", "c"]})
+    result = validate_analysis_readiness(df, "Correlation analysis")
+    assert result["status"] == "Not ready"
+    assert "Correlation has at least two numeric variables" in result["checks"]["check"].tolist()
+
+
+def test_regression_readiness_checks_numeric_target_and_features():
+    df = pd.DataFrame({"target": ["low", "high", "medium"], "feature": [1, 2, 3]})
+    result = validate_analysis_readiness(df, "Regression", "target")
+    checks = result["checks"].set_index("check")
+    assert checks.loc["Regression target is numeric", "status"] == "Blocked"
+
+
+def test_classification_readiness_accepts_two_classes_and_feature():
+    df = pd.DataFrame({"target": ["yes", "no", "yes"], "feature": [1, 2, 3]})
+    result = validate_analysis_readiness(df, "Classification", "target")
+    checks = result["checks"].set_index("check")
+    assert checks.loc["Classification target has at least two classes", "status"] == "Passed"
+    assert checks.loc["At least one varying feature is available", "status"] == "Passed"
+
+
+def test_time_series_readiness_requires_detectable_date_column():
+    df = pd.DataFrame({"period": ["2025-01-01", "2025-02-01"], "value": [1, 2]})
+    result = validate_analysis_readiness(df, "Time-series analysis")
+    checks = result["checks"].set_index("check")
+    assert checks.loc["A date/time column is identifiable", "status"] == "Passed"
