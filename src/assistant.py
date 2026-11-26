@@ -5,6 +5,98 @@ import re
 import pandas as pd
 
 
+_MONTH_LOOKUP = {
+    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9,
+    "oct": 10, "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
+}
+
+
+def _detect_time_dimension(df: pd.DataFrame) -> dict:
+    """Detect explicit date fields or common year/month columns without guessing IDs."""
+    result = {"period": None, "columns": [], "frequency": None}
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        return result
+    normalized = {col: re.sub(r"[^a-z0-9]+", "_", str(col).casefold()).strip("_") for col in df.columns}
+    year_col = next((c for c, n in normalized.items() if n in {"year", "yr", "calendar_year", "observation_year"}), None)
+    month_col = next((c for c, n in normalized.items() if n in {"month", "month_name", "month_number", "period_month"}), None)
+    date_col = next((c for c, n in normalized.items() if n in {"date", "datetime", "timestamp", "observation_date", "period_date"}), None)
+    if date_col is not None:
+        parsed = pd.to_datetime(df[date_col], errors="coerce")
+        if parsed.notna().mean() >= 0.8:
+            result.update({"period": parsed.dt.to_period("M"), "columns": [date_col], "frequency": "monthly"})
+            return result
+    if year_col is None:
+        return result
+    years = pd.to_numeric(df[year_col], errors="coerce")
+    valid_year = years.between(1800, 2200) & years.mod(1).eq(0)
+    if valid_year.mean() < 0.8:
+        return result
+    if month_col is not None:
+        raw_month = df[month_col]
+        month_numbers = pd.to_numeric(raw_month, errors="coerce")
+        month_names = raw_month.astype("string").str.strip().str.casefold().map(_MONTH_LOOKUP)
+        month_numbers = month_numbers.where(month_numbers.between(1, 12), month_names)
+        valid = valid_year & month_numbers.between(1, 12)
+        if valid.mean() >= 0.8:
+            dates = pd.Series(pd.NaT, index=df.index, dtype="datetime64[ns]")
+            dates.loc[valid] = pd.to_datetime({
+                "year": years.loc[valid].astype(int), "month": month_numbers.loc[valid].astype(int), "day": 1,
+            }).to_numpy()
+            result.update({"period": dates.dt.to_period("M"), "columns": [year_col, month_col], "frequency": "monthly"})
+            return result
+    year_text = years.where(valid_year).astype("Int64").astype("string")
+    dates = pd.to_datetime(year_text + "-01-01", errors="coerce")
+    result.update({"period": dates.dt.to_period("Y"), "columns": [year_col], "frequency": "annual"})
+    return result
+
+
+def _answer_temporal_question(df: pd.DataFrame, question: str, numeric: list) -> dict | None:
+    """Calculate chronological trends from explicit date/year/month fields."""
+    low = question.casefold()
+    terms = ("trend", "over time", "changed", "change", "increased", "decreased", "growth",
+             "year over year", "year-on-year", "yoy", "month over month", "month-on-month",
+             "mom", "from 20", "by year", "by month")
+    if not any(term in low for term in terms):
+        return None
+    info = _detect_time_dimension(df)
+    if info["period"] is None:
+        return None
+    measures = [c for c in numeric if c not in set(info["columns"])]
+    measure = _find_column(question, measures)
+    if measure is None and len(measures) == 1:
+        measure = measures[0]
+    if measure is None:
+        available = ", ".join(map(str, measures[:8])) or "no numeric measures"
+        return {"answer": "I detected a time dimension, but could not identify one numeric measure. "
+                          f"Please name the measure you want to analyse. Available measures include: {available}.",
+                "evidence": pd.DataFrame(), "intent": "temporal_clarification"}
+    work = pd.DataFrame({"period": info["period"], "value": pd.to_numeric(df[measure], errors="coerce")}).dropna()
+    if work.empty:
+        return {"answer": f"No valid date-period and numeric observations are available for {measure}.",
+                "evidence": pd.DataFrame(), "intent": "temporal"}
+    aggregation = "sum" if any(term in low for term in ("total", "sum", "aggregate")) else "mean"
+    trend = work.groupby("period", observed=True)["value"].agg(aggregation).sort_index().rename(measure).reset_index()
+    trend["period"] = trend["period"].astype(str)
+    trend["absolute_change"] = trend[measure].diff()
+    previous = trend[measure].shift(1)
+    trend["percentage_change"] = (trend["absolute_change"] / previous.abs() * 100).where(previous.ne(0))
+    if len(trend) < 2:
+        return {"answer": f"Only one valid time period is available for {measure}; at least two are needed to calculate a change.",
+                "evidence": trend, "intent": "temporal"}
+    first, last = trend.iloc[0], trend.iloc[-1]
+    change, baseline = float(last[measure] - first[measure]), float(first[measure])
+    pct = change / abs(baseline) * 100 if baseline != 0 else None
+    direction = "increased" if change > 0 else "decreased" if change < 0 else "remained unchanged"
+    pct_text = f" ({pct:+.2f}%)" if pct is not None else " (percentage change not calculated because the starting value is zero)"
+    answer = (f"Using {aggregation} aggregation by {info['frequency']} period, {measure} {direction} "
+              f"from {first['period']} ({baseline:,.4g}) to {last['period']} ({float(last[measure]):,.4g}), "
+              f"a change of {change:+,.4g}{pct_text}. The table shows {len(trend):,} chronological periods, "
+              "with absolute and percentage changes.")
+    return {"answer": answer, "evidence": trend, "intent": "temporal"}
+
+
 def suggest_analyses(df: pd.DataFrame) -> list[dict]:
     """Recommend useful next steps from observable dataset characteristics."""
     if not isinstance(df, pd.DataFrame) or df.empty:
@@ -62,7 +154,7 @@ def suggest_analyses(df: pd.DataFrame) -> list[dict]:
             "At least two categorical variables are available.",
             "Open Statistical testing and consider a chi-square test of independence.")
 
-    date_like = []
+    date_like = list(_detect_time_dimension(df)["columns"])
     for col in df.columns:
         if pd.api.types.is_datetime64_any_dtype(df[col]):
             date_like.append(col)
@@ -119,6 +211,10 @@ def _answer_dataset_question(df: pd.DataFrame, question: str) -> dict:
         if not pd.api.types.is_numeric_dtype(df[c]) and 1 < df[c].nunique(dropna=True) <= 200
     ]
     evidence = pd.DataFrame()
+
+    temporal_result = _answer_temporal_question(df, q, numeric)
+    if temporal_result is not None:
+        return temporal_result
 
     # Dataset interpretation is generated from reproducible descriptive evidence.
     # This path requires no language model, API key, GPU, or downloaded model.
@@ -315,10 +411,16 @@ def _answer_dataset_question(df: pd.DataFrame, question: str) -> dict:
         if len(numeric) < 2:
             return {"answer": "Correlation analysis needs at least two numeric columns. This dataset does not currently meet that requirement.", "evidence": pd.DataFrame(), "intent": "correlation"}
         method = "spearman" if "spearman" in low else "kendall" if "kendall" in low else "pearson"
-        corr = df[numeric].corr(method=method)
+        time_columns = set(_detect_time_dimension(df)["columns"])
+        correlation_columns = [col for col in numeric if col not in time_columns]
+        if len(correlation_columns) < 2:
+            return {"answer": "Correlation analysis needs at least two non-temporal numeric variables. "
+                              "Detected time fields are excluded to avoid mistaking shared time trends for substantive relationships.",
+                    "evidence": pd.DataFrame(), "intent": "correlation"}
+        corr = df[correlation_columns].corr(method=method)
         pairs = corr.where(pd.DataFrame(
-            [[i < j for j in range(len(numeric))] for i in range(len(numeric))],
-            index=numeric, columns=numeric
+            [[i < j for j in range(len(correlation_columns))] for i in range(len(correlation_columns))],
+            index=correlation_columns, columns=correlation_columns
         )).stack().reset_index()
         pairs.columns = ["variable_1", "variable_2", "correlation"]
         evidence = pairs.reindex(pairs.correlation.abs().sort_values(ascending=False).index).head(10)
