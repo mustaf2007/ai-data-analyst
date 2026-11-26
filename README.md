@@ -14,7 +14,8 @@ A local-first data analysis workspace built with Python, Streamlit and open-sour
 - **Relationships:** Pearson, Spearman and Kendall correlation matrices plus strongest pairwise associations.
 - **Predictive modeling:** local Random Forest regression/classification baseline with hold-out metrics and actual-vs-predicted comparison.
 - **Anomaly detection:** local Isolation Forest with configurable expected anomaly share.
-- **Exports:** active dataset CSV, Excel workbooks, PDF analysis reports and downloadable charts.\n- **Smart AI Assistant:** conversational general-purpose Q&A through Ollama or an opt-in OpenAI-compatible endpoint; dataset-only deterministic mode remains available without a model.\n- **Professional technical reports:** configurable report title, report type, author and purpose; executive summary, data quality, quantified findings, descriptive tables, correlations, recommendations, methodology and limitations; Markdown, PDF and Excel exports. Financial/investment reports additionally detect common portfolio fields and calculate total-portfolio and invested-sleeve returns separately, summarize holdings, and report fees without deducting them twice. Metrics are omitted when required fields are unavailable or ambiguous.\n- **Privacy controls:** model context uses dataset schema and aggregate summaries, not raw record rows. External API use is opt-in and clearly identified in the interface.
+- **Exports:** active dataset CSV, Excel workbooks, PDF analysis reports and downloadable charts.\n- **Smart AI Assistant:** conversational general-purpose Q&A through Ollama or an opt-in OpenAI-compatible endpoint; dataset-only deterministic mode remains available without a model.\n- **Professional technical reports:** configurable report title, report type, author and purpose; executive summary, data quality, quantified findings, descriptive tables, correlations, recommendations, methodology and limitations; Markdown, PDF and Excel exports.
+- **Research report builder:** enter a research question and objectives to generate a question-guided report from the active dataset. Includes data-quality screening, descriptive summaries, category frequencies, Pearson correlations, cautious automatic test selection (Welch t-test, one-way ANOVA or chi-square where the data structure supports it), effect sizes, p-values, assumptions and limitations, prioritised evidence-linked recommendations, and automatically generated Plotly charts. Downloads include a formatted PDF with chart images where static rendering is available, a Markdown report, and a multi-sheet Excel evidence workbook with source data, findings, statistical results, methodology, recommendations and chart-ready data. This workflow is local and does not require an AI API key. Financial/investment reports additionally detect common portfolio fields and calculate total-portfolio and invested-sleeve returns separately, summarize holdings, and report fees without deducting them twice. Metrics are omitted when required fields are unavailable or ambiguous.\n- **Privacy controls:** model context uses dataset schema and aggregate summaries, not raw record rows. External API use is opt-in and clearly identified in the interface.
 - **Engineering:** pytest suite, GitHub Actions CI, dependency files, Streamlit configuration and security notes.
 
 ## Quick start
@@ -62,7 +63,7 @@ Community Cloud is suitable for a public demo and lightweight use. It is not a s
 - Correlation does not imply causation.
 - Predictive modeling is a baseline workflow. The random hold-out split is not appropriate for every time-series, panel, grouped or leakage-prone dataset. It does not perform automated feature leakage detection, temporal validation, hyperparameter optimization or model governance.
 - Anomaly detection identifies unusual patterns, not confirmed errors, fraud or misconduct.
-- PDF export currently contains summary tables and observations, not chart images.
+- The legacy general-purpose PDF export contains summary tables and observations; the dedicated research report builder embeds chart images when the configured Plotly/Kaleido renderer is available and always includes chart data in Excel.
 - Excel support is `.xlsx`; legacy `.xls` is not supported.
 
 ## Repository layout
@@ -77,6 +78,7 @@ tests/
   test_analytics.py
   test_modeling.py
   test_reporting.py
+  test_research_reporting.py
 sample_data/
   sample_business_data.csv
 .streamlit/config.toml
