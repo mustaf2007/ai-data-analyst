@@ -656,3 +656,10 @@ def test_load_csv_treats_whitespace_only_text_cells_as_missing():
     assert pd.isna(df.loc[2, "notes"])
     assert df.loc[0, "region"] == "North"
 
+    cleaned = clean_dataset(
+        df,
+        missing_strategy="Fill numeric with median and categorical with mode",
+    )
+    assert cleaned["region"].isna().sum() == 0
+    assert cleaned["notes"].isna().sum() == 0
+
