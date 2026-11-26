@@ -22,6 +22,7 @@ from assistant import suggest_analyses, answer_dataset_question
 from research_reporting import build_research_report, build_research_excel, build_research_pdf
 from report_assistant import build_narrative_report
 from smart_assistant import ask_smart_assistant, build_dataset_context, default_assistant_provider
+from browser_ai import build_browser_ai_html
 from open_sources import list_open_datasets, load_open_dataset
 
 st.set_page_config(page_title="AI Data Analyst", page_icon="📊", layout="wide")
@@ -1750,113 +1751,134 @@ with tabs[5]:
         st.subheader("Smart AI Assistant")
         st.caption("Ask general questions, explore your dataset, interpret analytical results, and draft technical reports.")
         provider_options = [
+            "Browser AI (open-source · no API key)",
             "Free hosted AI (automatic fallback)",
             "Ollama (local model)",
             "OpenAI-compatible API (opt-in)",
         ]
         provider = st.selectbox(
             "AI model", provider_options,
-            help="Use free hosted AI with automatic fallback, a local Ollama model, or an optional OpenAI-compatible endpoint.",
+            help="Run an open-source model directly in your browser, or choose an optional hosted/local provider.",
             index=provider_options.index(default_assistant_provider()),
             key="smart_assistant_provider",
         )
-        free_api_keys = {}
-        if provider == "Free hosted AI (automatic fallback)":
-            st.markdown("Connect one or more free-tier providers. The assistant tries them in order and switches to the next configured provider if one is unavailable.")
-            with st.expander("Free AI setup · API keys", expanded=True):
-                st.caption("Create a free developer key with a provider, then paste it here. Keys are password-masked and used only for this Streamlit session; they are not saved in the repository.")
-                groq_key = st.text_input("Groq API key", type="password", key="smart_groq_key", help="Free-tier access is subject to model and account limits.")
-                openrouter_key = st.text_input("OpenRouter API key", type="password", key="smart_openrouter_key", help="Free-model availability and daily limits can change.")
-                gemini_key = st.text_input("Google Gemini API key", type="password", key="smart_gemini_key", help="Google AI Studio free-tier limits and data terms apply.")
-                free_api_keys = {"Groq": groq_key, "OpenRouter": openrouter_key, "Google Gemini": gemini_key}
-                st.markdown("[Get a Groq key](https://console.groq.com/keys) · [Get an OpenRouter key](https://openrouter.ai/keys) · [Get a Gemini key](https://aistudio.google.com/apikey)")
-            st.info("No single provider is guaranteed to be available all the time. Add two or more keys for better fallback. Free plans have quotas and can change. Your question and recent chat are sent to the selected provider; dataset column names and aggregate summaries may also be sent, but raw dataset rows are not included.")
-        elif provider == "Ollama (local model)":
-            st.info("General-purpose AI chat with no API key when a model server is reachable. Install Ollama and download a model (for example, ollama pull llama3.1:8b). On the same computer, the default address is http://localhost:11434. On Streamlit Cloud, configure OLLAMA_BASE_URL to a secure, reachable Ollama server and OLLAMA_MODEL to an installed model.")
-        else:
-            st.warning("This optional provider sends your question, recent chat context, and—when available—dataset column names and aggregate summaries, not raw dataset rows. Configure OPENAI_API_KEY and optional OPENAI_BASE_URL / OPENAI_MODEL as deployment secrets. Provider usage limits and charges may apply.")
-
-        smart_prompts = [
-            "Explain the most important patterns in this dataset.",
-            "What are the main data-quality risks?",
-            "Help me interpret the correlation results.",
-            "Draft a professional technical report outline for these data.",
-        ]
-        prompt_cols = st.columns(4)
-        selected_smart_prompt = None
-        for idx, suggestion in enumerate(smart_prompts):
-            if prompt_cols[idx].button(suggestion, key=f"smart_prompt_{idx}", use_container_width=True):
-                selected_smart_prompt = suggestion
-
-        for message in st.session_state.smart_chat_history:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-                evidence = message.get("evidence")
-                if isinstance(evidence, pd.DataFrame) and not evidence.empty:
-                    st.dataframe(evidence, use_container_width=True, hide_index=True)
-
-        smart_input = st.chat_input("Ask anything: data, research, finance, policy, statistics, writing...", key="smart_assistant_chat_input")
-        smart_question = smart_input or selected_smart_prompt
-        if smart_question:
-            st.session_state.smart_chat_history.append({"role": "user", "content": smart_question})
-            try:
-                dataset_context = build_dataset_context(df, st.session_state.source or "Active dataset") if provider != "Dataset tools (no AI server)" else ""
-                result = ask_smart_assistant(
-                    smart_question,
-                    history=st.session_state.smart_chat_history[:-1],
-                    dataset_context=dataset_context,
-                    provider=provider,
-                    df=df,
-                    context=st.session_state.smart_chat_context,
-                    free_api_keys=free_api_keys,
-                )
-                st.session_state.smart_chat_context = result.get("context", st.session_state.smart_chat_context)
-                st.session_state.smart_chat_history.append({
-                    "role": "assistant", "content": result["answer"],
-                    "evidence": result.get("evidence"),
-                    "provider": result.get("provider"),
-                })
-            except (RuntimeError, ValueError) as exc:
-                st.session_state.smart_chat_history.append({
-                    "role": "assistant", "content": f"Assistant unavailable: {exc}",
-                })
-            st.rerun()
-
-        latest_assistant = next(
-            (item for item in reversed(st.session_state.smart_chat_history)
-             if item.get("role") == "assistant" and item.get("content")),
-            None,
-        )
-        if latest_assistant:
-            st.divider()
-            st.markdown("#### Export latest assistant response")
-            export_md, export_pdf = st.columns(2)
-            export_md.download_button(
-                "Download response as Markdown",
-                latest_assistant["content"],
-                "smart_assistant_response.md",
-                "text/markdown",
-                key="download_smart_response_md",
-                use_container_width=True,
+        if provider == "Browser AI (open-source · no API key)":
+            st.markdown("#### Run an open model on your device")
+            st.caption("Powered by WebLLM and WebGPU. No provider account, API key, inference server or per-message API charge is required.")
+            include_dataset_context = st.checkbox(
+                "Include active dataset summary in this browser session",
+                value=True,
+                key="browser_ai_include_dataset",
+                help="Shares only column names and aggregate summaries with the browser component; raw dataset rows are not included.",
             )
-            try:
-                smart_pdf = build_text_report_pdf(
+            browser_context = (
+                build_dataset_context(df, st.session_state.source or "Active dataset")
+                if include_dataset_context else ""
+            )
+            if include_dataset_context:
+                st.caption("The app passes a compact schema and aggregate summary to your browser. The model processes it locally; raw rows are not passed.")
+            else:
+                st.caption("Dataset context is off. The assistant will answer general questions only.")
+            browser_html = build_browser_ai_html(browser_context, selected_theme)
+            st.components.v1.html(browser_html, height=760, scrolling=True)
+        else:
+            free_api_keys = {}
+            if provider == "Free hosted AI (automatic fallback)":
+                st.markdown("Connect one or more free-tier providers. The assistant tries them in order and switches to the next configured provider if one is unavailable.")
+                with st.expander("Free AI setup · API keys", expanded=True):
+                    st.caption("Create a free developer key with a provider, then paste it here. Keys are password-masked and used only for this Streamlit session; they are not saved in the repository.")
+                    groq_key = st.text_input("Groq API key", type="password", key="smart_groq_key", help="Free-tier access is subject to model and account limits.")
+                    openrouter_key = st.text_input("OpenRouter API key", type="password", key="smart_openrouter_key", help="Free-model availability and daily limits can change.")
+                    gemini_key = st.text_input("Google Gemini API key", type="password", key="smart_gemini_key", help="Google AI Studio free-tier limits and data terms apply.")
+                    free_api_keys = {"Groq": groq_key, "OpenRouter": openrouter_key, "Google Gemini": gemini_key}
+                    st.markdown("[Get a Groq key](https://console.groq.com/keys) · [Get an OpenRouter key](https://openrouter.ai/keys) · [Get a Gemini key](https://aistudio.google.com/apikey)")
+                st.info("No single provider is guaranteed to be available all the time. Add two or more keys for better fallback. Free plans have quotas and can change. Your question and recent chat are sent to the selected provider; dataset column names and aggregate summaries may also be sent, but raw dataset rows are not included.")
+            elif provider == "Ollama (local model)":
+                st.info("General-purpose AI chat with no API key when a model server is reachable. Install Ollama and download a model (for example, ollama pull llama3.1:8b). On the same computer, the default address is http://localhost:11434. On Streamlit Cloud, configure OLLAMA_BASE_URL to a secure, reachable Ollama server and OLLAMA_MODEL to an installed model.")
+            else:
+                st.warning("This optional provider sends your question, recent chat context, and—when available—dataset column names and aggregate summaries, not raw dataset rows. Configure OPENAI_API_KEY and optional OPENAI_BASE_URL / OPENAI_MODEL as deployment secrets. Provider usage limits and charges may apply.")
+    
+            smart_prompts = [
+                "Explain the most important patterns in this dataset.",
+                "What are the main data-quality risks?",
+                "Help me interpret the correlation results.",
+                "Draft a professional technical report outline for these data.",
+            ]
+            prompt_cols = st.columns(4)
+            selected_smart_prompt = None
+            for idx, suggestion in enumerate(smart_prompts):
+                if prompt_cols[idx].button(suggestion, key=f"smart_prompt_{idx}", use_container_width=True):
+                    selected_smart_prompt = suggestion
+    
+            for message in st.session_state.smart_chat_history:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+                    evidence = message.get("evidence")
+                    if isinstance(evidence, pd.DataFrame) and not evidence.empty:
+                        st.dataframe(evidence, use_container_width=True, hide_index=True)
+    
+            smart_input = st.chat_input("Ask anything: data, research, finance, policy, statistics, writing...", key="smart_assistant_chat_input")
+            smart_question = smart_input or selected_smart_prompt
+            if smart_question:
+                st.session_state.smart_chat_history.append({"role": "user", "content": smart_question})
+                try:
+                    dataset_context = build_dataset_context(df, st.session_state.source or "Active dataset") if provider != "Dataset tools (no AI server)" else ""
+                    result = ask_smart_assistant(
+                        smart_question,
+                        history=st.session_state.smart_chat_history[:-1],
+                        dataset_context=dataset_context,
+                        provider=provider,
+                        df=df,
+                        context=st.session_state.smart_chat_context,
+                        free_api_keys=free_api_keys,
+                    )
+                    st.session_state.smart_chat_context = result.get("context", st.session_state.smart_chat_context)
+                    st.session_state.smart_chat_history.append({
+                        "role": "assistant", "content": result["answer"],
+                        "evidence": result.get("evidence"),
+                        "provider": result.get("provider"),
+                    })
+                except (RuntimeError, ValueError) as exc:
+                    st.session_state.smart_chat_history.append({
+                        "role": "assistant", "content": f"Assistant unavailable: {exc}",
+                    })
+                st.rerun()
+    
+            latest_assistant = next(
+                (item for item in reversed(st.session_state.smart_chat_history)
+                 if item.get("role") == "assistant" and item.get("content")),
+                None,
+            )
+            if latest_assistant:
+                st.divider()
+                st.markdown("#### Export latest assistant response")
+                export_md, export_pdf = st.columns(2)
+                export_md.download_button(
+                    "Download response as Markdown",
                     latest_assistant["content"],
-                    report_title="AI Smart Assistant | Technical Report",
-                )
-                export_pdf.download_button(
-                    "Download response as PDF",
-                    smart_pdf,
-                    "smart_assistant_technical_report.pdf",
-                    "application/pdf",
-                    key="download_smart_response_pdf",
+                    "smart_assistant_response.md",
+                    "text/markdown",
+                    key="download_smart_response_md",
                     use_container_width=True,
                 )
-            except Exception as exc:
-                st.caption(f"PDF export unavailable: {exc}")
-
-        if st.button("Clear smart assistant conversation", key="clear_smart_assistant"):
-            st.session_state.smart_chat_history = []
-            st.session_state.smart_chat_context = None
-            st.rerun()
+                try:
+                    smart_pdf = build_text_report_pdf(
+                        latest_assistant["content"],
+                        report_title="AI Smart Assistant | Technical Report",
+                    )
+                    export_pdf.download_button(
+                        "Download response as PDF",
+                        smart_pdf,
+                        "smart_assistant_technical_report.pdf",
+                        "application/pdf",
+                        key="download_smart_response_pdf",
+                        use_container_width=True,
+                    )
+                except Exception as exc:
+                    st.caption(f"PDF export unavailable: {exc}")
+    
+            if st.button("Clear smart assistant conversation", key="clear_smart_assistant"):
+                st.session_state.smart_chat_history = []
+                st.session_state.smart_chat_context = None
+                st.rerun()
 
