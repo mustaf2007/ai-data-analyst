@@ -644,3 +644,22 @@ def test_header_normalization_handles_generated_suffix_collisions():
     columns = _make_unique_column_names(["a", "a", "a.1", "a", "a.2"])
     assert columns == ["a", "a.1", "a.1.1", "a.2", "a.2.1"]
     assert len(columns) == len(set(columns))
+
+
+def test_load_csv_treats_whitespace_only_text_cells_as_missing():
+    df = load_dataset(
+        "whitespace.csv",
+        b"region,amount,notes\nNorth,10,valid\n   ,20,   \nSouth,30,\n",
+    )
+    assert pd.isna(df.loc[1, "region"])
+    assert pd.isna(df.loc[1, "notes"])
+    assert pd.isna(df.loc[2, "notes"])
+    assert df.loc[0, "region"] == "North"
+
+    cleaned = clean_dataset(
+        df,
+        missing_strategy="Fill numeric with median and categorical with mode",
+    )
+    assert cleaned["region"].isna().sum() == 0
+    assert cleaned["notes"].isna().sum() == 0
+
