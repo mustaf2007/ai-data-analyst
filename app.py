@@ -20,6 +20,7 @@ from modeling import train_predictive_model, detect_anomalies
 from reporting import build_pdf_report, build_text_report_pdf
 from assistant import suggest_analyses, answer_dataset_question
 from research_reporting import build_research_report, build_research_excel, build_research_pdf
+from report_assistant import build_narrative_report
 from smart_assistant import ask_smart_assistant, build_dataset_context, default_assistant_provider
 
 st.set_page_config(page_title="AI Data Analyst", page_icon="📊", layout="wide")
@@ -142,6 +143,7 @@ def initialise_state():
         "cleaning_report": None,
         "chart_exports": {},
         "report_artifacts": None,
+        "narrative_report_artifacts": None,
         "research_report_artifacts": None,
         "chat_history": [],
         "chat_context": None,
@@ -169,6 +171,7 @@ def set_dataset(data, source, upload_signature=None):
     st.session_state.cleaning_report = None
     st.session_state.chart_exports = {}
     st.session_state.report_artifacts = None
+    st.session_state.narrative_report_artifacts = None
     st.session_state.research_report_artifacts = None
     st.session_state.chat_history = []
     st.session_state.chat_context = None
@@ -457,6 +460,7 @@ with tabs[1]:
                 clear_derived_results()
                 st.session_state.chart_exports = {}
                 st.session_state.report_artifacts = None
+                st.session_state.narrative_report_artifacts = None
                 st.session_state.research_report_artifacts = None
                 st.session_state.chat_history = []
                 st.session_state.chat_context = None
@@ -1381,7 +1385,7 @@ with tabs[4]:
                 "recommendations and chart-ready data."
             )
 
-    with report_tabs[1]:
+    with report_tabs[2]:
         st.subheader("Analysis Report Builder")
         st.caption(
             "Create a tailored PDF report and a multi-sheet Excel workbook from the active dataset. "
@@ -1525,6 +1529,112 @@ with tabs[4]:
             file_name="analysis_dataset.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+
+
+    with report_tabs[1]:
+            st.subheader("Specialist technical report")
+            st.caption(
+                "Create a specialist report for technical, financial, policy, monitoring and evaluation, or market analysis. "
+                "Calculations are local and do not invent significance, causality or forecasts."
+            )
+            with st.form("technical_report_settings"):
+                technical_title = st.text_input("Report title", "Portfolio / Dataset Technical Analysis Report")
+                technical_type = st.selectbox(
+                    "Report type",
+                    ["General technical report", "Financial / investment performance report",
+                     "Research and policy report", "Monitoring and evaluation report",
+                     "Market and business intelligence report"],
+                )
+                technical_author = st.text_input("Prepared by", "")
+                technical_purpose = st.text_area(
+                    "Report purpose, background or analytical context (optional)",
+                    placeholder="Describe the decision, assignment, reporting period, benchmark or key context...",
+                    height=90,
+                )
+                generate_technical = st.form_submit_button("Generate professional technical report", type="primary")
+            if generate_technical:
+                try:
+                    narrative = build_narrative_report(
+                        df, st.session_state.source or "Active dataset",
+                        report_title=technical_title.strip() or "Technical Data Analysis Report",
+                        prepared_by=technical_author.strip(),
+                        report_type=technical_type,
+                        purpose=technical_purpose.strip(),
+                    )
+                    report_findings = narrative["findings"] + [
+                        "Recommendation: " + item for item in narrative["recommendations"]
+                    ]
+                    financial_metrics = narrative.get("financial_analysis", {}).get("metrics", {})
+                    if "portfolio_return_pct" in financial_metrics:
+                        report_findings.append(
+                            "Total portfolio return: {:.2f}% (P&L: USD {:,.2f}).".format(
+                                financial_metrics["portfolio_return_pct"],
+                                financial_metrics["portfolio_pnl"],
+                            )
+                        )
+                    if "invested_sleeve_return_pct" in financial_metrics:
+                        report_findings.append(
+                            "Invested-sleeve return: {:.2f}% (P&L: USD {:,.2f}).".format(
+                                financial_metrics["invested_sleeve_return_pct"],
+                                financial_metrics["invested_sleeve_pnl"],
+                            )
+                        )
+                    if "reported_fees" in financial_metrics:
+                        report_findings.append(
+                            "Reported fees / brokerage: USD {:,.2f}; not deducted again.".format(
+                                financial_metrics["reported_fees"]
+                            )
+                        )
+                    report_sections = [
+                        "Dataset overview", "Key findings", "Numeric summary",
+                        "Correlation matrix",
+                    ]
+                    if "financial" in technical_type.lower() or "investment" in technical_type.lower():
+                        report_sections.append("Financial performance attribution")
+                    narrative_pdf = build_pdf_report(
+                        st.session_state.source, df, p, numeric_summary(df),
+                        report_findings,
+                        report_title=narrative["title"],
+                        prepared_by=narrative["prepared_by"],
+                        executive_summary=narrative["executive_summary"],
+                        methodology=narrative["methodology"],
+                        sections=report_sections,
+                        financial_analysis=narrative.get("financial_analysis"),
+                    )
+                    narrative_excel = excel_analysis_bytes(
+                        df, p, numeric_summary(df),
+                        financial_analysis=narrative.get("financial_analysis"),
+                    )
+                    st.session_state.narrative_report_artifacts = {
+                        "markdown": narrative["markdown"], "pdf": narrative_pdf,
+                        "xlsx": narrative_excel, "title": narrative["title"],
+                    }
+                except (ValueError, TypeError, KeyError) as exc:
+                    st.error(f"Technical report could not be generated: {exc}")
+
+            narrative_artifacts = st.session_state.get("narrative_report_artifacts")
+            if narrative_artifacts:
+                st.markdown(narrative_artifacts["markdown"])
+                safe_report_name = "data_analysis_report"
+                export_cols = st.columns(3)
+                export_cols[0].download_button(
+                    "Download Markdown report", narrative_artifacts["markdown"],
+                    f"{safe_report_name}.md", "text/markdown",
+                    key="download_narrative_markdown", use_container_width=True,
+                )
+                export_cols[1].download_button(
+                    "Download PDF report", narrative_artifacts["pdf"],
+                    f"{safe_report_name}.pdf", "application/pdf",
+                    key="download_narrative_pdf", use_container_width=True,
+                )
+                export_cols[2].download_button(
+                    "Download Excel workbook", narrative_artifacts["xlsx"],
+                    f"{safe_report_name}.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="download_narrative_excel", use_container_width=True,
+                )
+            else:
+                st.info("Generate the report to preview its findings and export Markdown, PDF and Excel files.")
 
 with tabs[5]:
     assistant_tabs = st.tabs(["Ask the data","AI assistant"])
