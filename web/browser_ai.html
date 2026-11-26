@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root { color-scheme: light; --bg:#f7f9fc; --panel:#fff; --text:#172b4d; --muted:#64748b; --accent:#2563eb; --line:#e2e8f0; }
+* { box-sizing:border-box; }
+body { margin:0; padding:10px; background:var(--bg); color:var(--text); font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+.shell { max-width:1100px; margin:0 auto; border:1px solid var(--line); border-radius:16px; overflow:hidden; background:var(--panel); }
+.top { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.brand { display:flex; align-items:center; gap:10px; font-weight:750; }
+.mark { display:grid; place-items:center; width:34px; height:34px; border-radius:10px; background:var(--accent); color:white; font-weight:800; }
+.sub { color:var(--muted); font-size:12px; font-weight:500; }
+.pill { border:1px solid var(--line); color:var(--muted); border-radius:999px; padding:5px 9px; font-size:11px; }
+.controls { display:flex; gap:9px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+select,button,textarea { font:inherit; }
+select { min-width:240px; border:1px solid var(--line); border-radius:9px; padding:9px 10px; color:var(--text); background:var(--panel); }
+button { border:1px solid var(--line); border-radius:9px; padding:9px 13px; background:var(--panel); color:var(--text); cursor:pointer; font-weight:650; }
+button.primary { background:var(--accent); color:white; border-color:var(--accent); }
+button:disabled { opacity:.45; cursor:not-allowed; }
+.progress-wrap { padding:0 16px 12px; display:none; }
+.progress-track { height:7px; background:var(--line); border-radius:99px; overflow:hidden; }
+.progress-fill { width:0%; height:100%; background:var(--accent); transition:width .2s; }
+.progress-label { color:var(--muted); font-size:12px; margin:5px 0; }
+.notice { margin:12px 16px; padding:10px 12px; border-radius:10px; background:var(--bg); color:var(--muted); font-size:12px; border:1px solid var(--line); }
+.chat { padding:14px 16px; min-height:270px; max-height:430px; overflow:auto; display:flex; flex-direction:column; gap:12px; }
+.empty { color:var(--muted); text-align:center; margin:auto; max-width:470px; padding:35px 10px; }
+.msg { max-width:88%; padding:11px 13px; border-radius:13px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.msg.user { align-self:flex-end; background:var(--bg); border:1px solid var(--line); }
+.msg.assistant { align-self:flex-start; background:var(--panel); border:1px solid var(--line); }
+.msg .who { color:var(--muted); font-size:10px; font-weight:750; letter-spacing:.06em; text-transform:uppercase; margin-bottom:5px; }
+.composer { display:flex; gap:9px; padding:12px 16px 14px; border-top:1px solid var(--line); align-items:flex-end; }
+textarea { resize:vertical; min-height:48px; max-height:130px; flex:1; border:1px solid var(--line); border-radius:10px; padding:11px 12px; background:var(--panel); color:var(--text); outline-color:var(--accent); }
+.footer { display:flex; justify-content:space-between; gap:8px; padding:0 16px 12px; color:var(--muted); font-size:11px; flex-wrap:wrap; }
+.status { color:var(--muted); font-size:12px; }
+.suggestions { display:flex; gap:7px; flex-wrap:wrap; padding:0 16px 12px; }
+.suggestions button { font-size:12px; color:var(--muted); padding:6px 9px; font-weight:550; }
+@media(max-width:600px){body{padding:4px}.top,.controls,.chat,.composer{padding-left:10px;padding-right:10px}.msg{max-width:96%}select{width:100%;min-width:0}.composer{flex-wrap:wrap}.composer button{width:100%}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="top">
+    <div class="brand"><div class="mark">AI</div><div>Browser AI Assistant<div class="sub">Open-source model · Runs on this device</div></div></div>
+    <span class="pill">No API key · No inference server</span>
+  </div>
+  <div class="controls">
+    <select id="model" aria-label="Choose open model">
+      <option value="Qwen3.5-0.8B-q4f16_1-MLC">Qwen 3.5 · 0.8B · lighter model</option>
+      <option value="Qwen3.5-2B-q4f16_1-MLC">Qwen 3.5 · 2B · stronger model</option>
+    </select>
+    <button id="load" class="primary">Load model</button>
+    <button id="clear">Clear chat</button>
+    <span id="status" class="status">Checking browser support…</span>
+  </div>
+  <div id="progressWrap" class="progress-wrap">
+    <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
+    <div id="progressLabel" class="progress-label">Preparing model…</div>
+  </div>
+  <div class="notice" id="notice">First use downloads the model and runtime files from public model hosting/CDN sources. Your prompts and included dataset summary are processed in this browser, not sent to an inference API.</div>
+  <div id="chat" class="chat"><div class="empty"><strong>Your local AI workspace</strong><br>Load a model to start. Ask general questions or use the optional active-dataset summary.</div></div>
+  <div class="suggestions">
+    <button data-prompt="Explain a complex topic in simple terms.">Explain a topic</button>
+    <button data-prompt="Help me design a research methodology for a policy study.">Research methodology</button>
+    <button data-prompt="Suggest a clear workflow for exploring and analysing a new dataset.">Data analysis workflow</button>
+  </div>
+  <form id="form" class="composer">
+    <textarea id="prompt" placeholder="Load a model, then ask anything…" rows="2" disabled></textarea>
+    <button id="send" class="primary" type="submit" disabled>Send</button>
+  </form>
+  <div class="footer"><span id="modelState">Model not loaded</span><span>Inference: on-device WebGPU</span></div>
+</div>
+<script type="module">
+const DATASET_CONTEXT = __CONTEXT__;
+const PALETTE = __PALETTE__;
+for (const [key,value] of Object.entries(PALETTE)) document.documentElement.style.setProperty("--"+key,value);
+const $ = (id) => document.getElementById(id);
+const chat = $("chat"), status = $("status"), loadButton = $("load"), sendButton = $("send");
+let engine = null, busy = false, history = [];
+const systemPrompt = "You are a capable, professional general-purpose AI assistant. Help with research, economics, public policy, statistics, data analysis, programming, education, writing and planning. Be accurate, structured and transparent about uncertainty. Do not invent sources or dataset values. Distinguish facts, assumptions and recommendations." + (DATASET_CONTEXT ? "\n\nACTIVE DATASET CONTEXT (schema and aggregate summaries only; no raw records):\n" + DATASET_CONTEXT : "");
+function addMessage(role, content) {
+  const empty = chat.querySelector(".empty"); if (empty) empty.remove();
+  const node = document.createElement("div"); node.className = "msg " + role;
+  const who = document.createElement("div"); who.className = "who"; who.textContent = role === "user" ? "You" : "Local AI";
+  const body = document.createElement("div"); body.className = "body"; body.textContent = content;
+  node.append(who, body); chat.append(node); chat.scrollTop = chat.scrollHeight; return body;
+}
+function setBusy(value) { busy = value; sendButton.disabled = value || !engine; $("prompt").disabled = value || !engine; loadButton.disabled = value; }
+function setProgress(text, progress) {
+  $("progressWrap").style.display = "block"; $("progressLabel").textContent = text || "Loading model…";
+  if (Number.isFinite(progress)) $("progressFill").style.width = Math.max(0,Math.min(100,progress*100)) + "%";
+}
+async function checkSupport() {
+  if (!window.isSecureContext) { status.textContent = "Secure browser connection required"; $("notice").textContent = "WebGPU requires a secure HTTPS browser context. Open the application over HTTPS."; loadButton.disabled = true; return false; }
+  if (!navigator.gpu) { status.textContent = "WebGPU not available"; $("notice").textContent = "This browser or embedded frame does not expose WebGPU. Try the latest Chrome or Edge on a computer with WebGPU enabled."; loadButton.disabled = true; return false; }
+  try { const adapter = await navigator.gpu.requestAdapter(); if (!adapter) throw new Error("No compatible graphics adapter was found."); status.textContent = "WebGPU ready"; return true; }
+  catch (error) { status.textContent = "WebGPU unavailable"; $("notice").textContent = error.message + " Try a recent Chrome/Edge browser and update graphics drivers."; loadButton.disabled = true; return false; }
+}
+const supported = await checkSupport();
+loadButton.addEventListener("click", async () => {
+  if (!supported || busy) return;
+  const model = $("model").value; setBusy(true); setProgress("Downloading and preparing " + model + "…",0); status.textContent = "Loading model…";
+  try {
+    const webllm = await import("https://esm.run/@mlc-ai/web-llm@0.2.89");
+    const progress = (report) => setProgress(report.text || "Loading model…", report.progress);
+    if (!engine) engine = await webllm.CreateMLCEngine(model,{initProgressCallback:progress});
+    else await engine.reload(model,{initProgressCallback:progress});
+    $("progressWrap").style.display = "none"; $("modelState").textContent = "Ready · " + model;
+    status.textContent = "Model ready on this device";
+    $("notice").textContent = "Model ready. Prompts and included dataset summaries are processed in this browser. Model files are cached where browser storage permits; first download may take several minutes.";
+    $("prompt").disabled = false; sendButton.disabled = false; addMessage("assistant","I'm ready. Ask a question to begin.");
+  } catch (error) {
+    status.textContent = "Model could not be loaded";
+    setProgress("Load failed: " + (error?.message || String(error)),0);
+    $("notice").textContent = "The model could not be loaded. Check your connection, available memory and WebGPU support, then try the lighter model. Details: " + (error?.message || String(error));
+  } finally { setBusy(false); if (engine) { $("prompt").disabled=false; sendButton.disabled=false; } }
+});
+async function sendPrompt(value) {
+  const question = String(value || "").trim(); if (!question || !engine || busy) return;
+  $("prompt").value = ""; addMessage("user",question); const output = addMessage("assistant","Thinking…");
+  history.push({role:"user",content:question}); setBusy(true); status.textContent = "Generating locally…";
+  try {
+    const messages = [{role:"system",content:systemPrompt},...history.slice(-12)];
+    const stream = await engine.chat.completions.create({messages,stream:true,temperature:0.45,max_tokens:900});
+    let answer = "";
+    for await (const chunk of stream) { answer += chunk.choices?.[0]?.delta?.content || ""; output.textContent = answer || "Thinking…"; chat.scrollTop=chat.scrollHeight; }
+    if (!answer.trim()) answer = "The model returned an empty response. Please try again.";
+    output.textContent = answer; history.push({role:"assistant",content:answer});
+  } catch (error) { output.textContent = "Generation failed: " + (error?.message || String(error)); history.pop(); }
+  finally { setBusy(false); status.textContent = "Model ready · local inference"; $("prompt").focus(); }
+}
+$("form").addEventListener("submit",(event)=>{event.preventDefault();sendPrompt($("prompt").value);});
+$("prompt").addEventListener("keydown",(event)=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();$("form").requestSubmit();}});
+$("clear").addEventListener("click",()=>{history=[];chat.innerHTML='<div class="empty"><strong>Conversation cleared</strong><br>Ask a new question whenever you are ready.</div>';});
+document.querySelectorAll("[data-prompt]").forEach(button=>button.addEventListener("click",()=>{if(!engine){status.textContent="Load a model before sending a question.";return;}sendPrompt(button.dataset.prompt);}));
+</script>
+</body>
+</html>
