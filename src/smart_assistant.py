@@ -58,7 +58,7 @@ def _setting(name: str, default: str = "") -> str:
 
 def default_assistant_provider() -> str:
     """Use the no-API-key open-source model path by default."""
-    return "Ollama (local model)"
+    return "Free hosted AI (automatic fallback)"
 
 
 def _post_json(url: str, payload: dict, headers: dict | None = None, timeout: int = 90) -> dict:
