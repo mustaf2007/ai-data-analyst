@@ -11,6 +11,23 @@ MAX_COLUMNS = 150
 class DataInputError(ValueError):
     """Invalid or unsafe dataset input."""
 
+
+def _make_unique_column_names(columns):
+    """Normalize headers and guarantee uniqueness without overwriting source columns."""
+    used = set()
+    result = []
+    for raw in columns:
+        base = str(raw).strip() or "unnamed"
+        candidate = base
+        suffix = 0
+        while candidate in used:
+            suffix += 1
+            candidate = f"{base}.{suffix}"
+        used.add(candidate)
+        result.append(candidate)
+    return result
+
+
 def load_dataset(filename: str, content: bytes) -> pd.DataFrame:
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if ext not in {"csv", "xlsx"}: raise DataInputError("Upload a CSV or XLSX file.")
@@ -29,19 +46,9 @@ def load_dataset(filename: str, content: bytes) -> pd.DataFrame:
     except Exception as exc: raise DataInputError(f"Could not read file: {exc}") from exc
     if df.empty: raise DataInputError("The file contains no data rows.")
     if len(df) > MAX_ROWS or df.shape[1] > MAX_COLUMNS: raise DataInputError("Dataset exceeds row or column safeguards.")
-    # Make every header unique, including collisions between generated suffixes
-    # and names that already exist in the source file (for example: a, a, a.1).
-    cols, used = [], set()
-    for raw in df.columns:
-        base = str(raw).strip() or "unnamed"
-        candidate = base
-        suffix = 0
-        while candidate in used:
-            suffix += 1
-            candidate = f"{base}.{suffix}"
-        used.add(candidate)
-        cols.append(candidate)
-    df.columns = cols
+    # Pandas may already disambiguate duplicate CSV headers; this second pass
+    # handles XLSX headers and collisions created by whitespace/blank normalization.
+    df.columns = _make_unique_column_names(df.columns)
     return df
 
 def profile_dataset(df: pd.DataFrame) -> dict:
