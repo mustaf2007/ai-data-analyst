@@ -57,8 +57,8 @@ def _setting(name: str, default: str = "") -> str:
 
 
 def default_assistant_provider() -> str:
-    """Use the no-API-key open-source model path by default."""
-    return "Browser AI (open-source · no API key)"
+    """Start with deterministic dataset analysis; no model or API is required."""
+    return "Dataset tools (no AI server)"
 
 
 def _post_json(url: str, payload: dict, headers: dict | None = None, timeout: int = 90) -> dict:
