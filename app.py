@@ -19,7 +19,6 @@ from analytics import (
 from modeling import train_predictive_model, detect_anomalies
 from reporting import build_pdf_report, build_text_report_pdf
 from assistant import suggest_analyses, answer_dataset_question
-from report_assistant import build_narrative_report
 from research_reporting import build_research_report, build_research_excel, build_research_pdf
 from smart_assistant import ask_smart_assistant, build_dataset_context, default_assistant_provider
 
@@ -215,12 +214,20 @@ with st.sidebar:
         except (OSError, DataInputError) as exc:
             st.error(f"Could not load built-in sample: {exc}")
 
-    if st.session_state.raw is not None and st.button("Reset to original"):
-        st.session_state.active = st.session_state.raw.copy(deep=True)
-        clear_derived_results()
-        st.session_state.cleaning_report = None
+    if st.session_state.raw is not None and st.button("Reset to original", use_container_width=True):
+        set_dataset(st.session_state.raw, st.session_state.source)
 
-    st.caption("Files are processed in this app session. Avoid uploading sensitive data to a public demo.")
+    if st.session_state.active is not None:
+        st.divider()
+        st.markdown("**Active dataset**")
+        st.caption(
+            f"{st.session_state.source} · "
+            f"{len(st.session_state.active):,} records · "
+            f"{st.session_state.active.shape[1]:,} variables"
+        )
+        st.caption("Changes are held in this session. Avoid uploading confidential data to a public demo.")
+
+    st.caption("CSV and XLSX · Local processing · No API key for core analysis")
 
 theme_css = {
     "Light": ("#f4f7fb", "#ffffff", "#172b4d", "#64748b", "#2563eb"),
@@ -448,6 +455,13 @@ with tabs[1]:
                 st.session_state.active = cleaned
                 st.session_state.cleaning_report = report
                 clear_derived_results()
+                st.session_state.chart_exports = {}
+                st.session_state.report_artifacts = None
+                st.session_state.research_report_artifacts = None
+                st.session_state.chat_history = []
+                st.session_state.chat_context = None
+                st.session_state.smart_chat_history = []
+                st.session_state.smart_chat_context = None
                 st.rerun()
             except (ValueError, TypeError) as exc:
                 st.error(f"Cleaning could not be applied: {exc}")
