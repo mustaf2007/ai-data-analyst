@@ -16,7 +16,7 @@ def _fmt(value):
 
 def build_narrative_report(
     df: pd.DataFrame, source: str = "Uploaded dataset", *,
-    report_title: str = "Technical Data Analysis Report",
+    report_title: str = "Data Analysis Report",
     prepared_by: str = "", report_type: str = "General technical report",
     purpose: str = "",
 ) -> dict:
