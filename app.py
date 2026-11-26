@@ -19,7 +19,8 @@ from analytics import (
 from modeling import train_predictive_model, detect_anomalies
 from reporting import build_pdf_report
 from assistant import suggest_analyses, answer_dataset_question
-from report_assistant import build_narrative_report\nfrom smart_assistant import ask_smart_assistant, build_dataset_context
+from report_assistant import build_narrative_report
+from smart_assistant import ask_smart_assistant, build_dataset_context
 
 st.set_page_config(page_title="AI Data Analyst", page_icon="📊", layout="wide")
 st.title("📊 AI Data Analyst")
@@ -131,7 +132,10 @@ def initialise_state():
         "report_artifacts": None,
         "narrative_report_artifacts": None,
         "chat_history": [],
-        "chat_context": None,\n        "smart_chat_history": [],\n        "smart_chat_context": None,\n        "smart_report_artifacts": None,
+        "chat_context": None,
+        "smart_chat_history": [],
+        "smart_chat_context": None,
+        "smart_report_artifacts": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -156,6 +160,9 @@ def set_dataset(data, source, upload_signature=None):
     st.session_state.narrative_report_artifacts = None
     st.session_state.chat_history = []
     st.session_state.chat_context = None
+    st.session_state.smart_chat_history = []
+    st.session_state.smart_chat_context = None
+    st.session_state.smart_report_artifacts = None
     if upload_signature is not None:
         st.session_state.upload_signature = upload_signature
     clear_derived_results()
@@ -1398,7 +1405,7 @@ with tabs[17]:
             )
             narrative_pdf = build_pdf_report(
                 st.session_state.source, df, p, numeric_summary(df),
-                narrative["findings"],
+                narrative["findings"] + ["Recommendation: " + item for item in narrative["recommendations"]],
                 report_title=narrative["title"],
                 prepared_by=narrative["prepared_by"],
                 executive_summary=narrative["executive_summary"],
@@ -1439,7 +1446,8 @@ with tabs[17]:
         )
     else:
         st.info("Generate the report to preview its findings and export Markdown, PDF and Excel files.")
-\n
+
+
 with tabs[18]:
     st.subheader("Smart AI Assistant")
     st.caption("Ask general questions, explore your dataset, interpret analytical results, and draft technical reports.")
