@@ -8,7 +8,7 @@ def test_browser_ai_template_is_fully_rendered():
     assert "Qwen3.5-0.8B-q4f16_1-MLC" in html
     assert "Qwen3.5-2B-q4f16_1-MLC" in html
     assert "navigator.gpu" in html
-    assert "stream: true" in html
+    assert "stream:true" in html
     assert "Revenue summary: 100" in html
     assert "--accent" in html
 
