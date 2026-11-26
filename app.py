@@ -20,7 +20,7 @@ from modeling import train_predictive_model, detect_anomalies
 from reporting import build_pdf_report, build_text_report_pdf
 from assistant import suggest_analyses, answer_dataset_question
 from report_assistant import build_narrative_report
-from smart_assistant import ask_smart_assistant, build_dataset_context
+from smart_assistant import ask_smart_assistant, build_dataset_context, default_assistant_provider
 
 st.set_page_config(page_title="AI Data Analyst", page_icon="📊", layout="wide")
 st.title("📊 AI Data Analyst")
@@ -1455,6 +1455,7 @@ with tabs[18]:
         "Assistant engine",
         ["Dataset tools (no AI server)", "Ollama (local model)", "OpenAI-compatible API (opt-in)"],
         help="Dataset tools are free and deterministic. Ollama runs a model on your own machine/server. API mode sends your question and compact dataset summaries to the configured provider.",
+        index=["Dataset tools (no AI server)", "Ollama (local model)", "OpenAI-compatible API (opt-in)"].index(default_assistant_provider()),
         key="smart_assistant_provider",
     )
     if provider == "Ollama (local model)":
@@ -1462,7 +1463,7 @@ with tabs[18]:
     elif provider == "OpenAI-compatible API (opt-in)":
         st.warning("External processing is enabled only when you choose this option. The assistant sends your question, recent chat context, dataset column names and aggregate summaries—not raw dataset rows. Configure OPENAI_API_KEY and optional OPENAI_BASE_URL / OPENAI_MODEL as deployment secrets.")
     else:
-        st.caption("No generative model is used in this mode. Answers are calculated directly from the active dataset; use the Ask the Data tab for supported questions.")
+        st.info("You are currently using deterministic dataset tools, not a generative AI model. To enable general conversation and advanced report drafting on Streamlit Cloud, add OPENAI_API_KEY to the app's Secrets, then reload. Example secret: OPENAI_API_KEY = \"your-api-key\". You can also configure OPENAI_MODEL and OPENAI_BASE_URL. No key is included in the repository.")
 
     smart_prompts = [
         "Explain the most important patterns in this dataset.",
