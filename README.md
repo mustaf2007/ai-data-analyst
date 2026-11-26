@@ -2,7 +2,7 @@
 
 A local-first analytics workspace for CSV and Excel datasets. Prepare data, explore patterns, test relationships, build baseline models, and produce evidence-based reports from one streamlined interface.
 
-**Core analysis and public open-data connections do not require an API key.** Data processing, statistical analysis, charts, and report generation run with Python libraries. The optional Smart AI Assistant can use curated free hosted AI providers (provider keys are required), a local or self-hosted Ollama model, or an OpenAI-compatible API.
+**Core analysis, public open-data connections and the browser-based AI assistant do not require an API key.** The Smart AI Assistant can run open-source Qwen models directly in the visitor’s browser using WebLLM and WebGPU. Optional hosted providers and Ollama remain available as alternatives.
 
 ## Workspace guide
 
@@ -31,7 +31,7 @@ Related tools are grouped into secondary tabs. Specialist report types remain av
 - **Research Report Builder:** enter a research question and objectives to produce descriptive evidence, question-guided statistical screening, effect sizes, automatically generated charts, methodology, limitations and prioritised recommendations. Download a formatted PDF, Markdown report and multi-sheet Excel evidence workbook with source data and chart-ready tables. The workflow uses local calculations and does not require an AI API key.
 - **Specialist reports:** generate technical, financial/investment, research/policy, monitoring/evaluation or market/business reports. When explicit portfolio fields are available, financial metrics and holdings attribution are included in PDF and Excel outputs.
 - **Financial report support:** when explicit, unambiguous portfolio fields are present, financial reporting can distinguish total-portfolio and invested-sleeve performance and report fees without deducting them twice.
-- **Assistant options:** Ask the Data provides deterministic answers from supported dataset calculations. Smart AI Assistant supports Ollama (no API key; local/self-hosted model required), an offline dataset-tools fallback, and an optional OpenAI-compatible endpoint.
+- **Assistant options:** Ask the Data provides deterministic answers from supported dataset calculations. Browser AI runs Qwen 3.5 open models locally in the browser with WebLLM/WebGPU and requires no API key or inference server. The first use downloads model/runtime files and caches them in browser storage where supported. Groq, OpenRouter, Gemini, Ollama and OpenAI-compatible endpoints remain optional alternatives.
 
 ## Quick start
 
@@ -50,7 +50,11 @@ streamlit run app.py
 
 Open the local URL printed by Streamlit. Choose **Load built-in sample** from the sidebar to explore the app without uploading a file, or expand **Connect public open data** to retrieve a public World Bank or Our World in Data dataset without credentials.
 
-## Public open-data connections\n\nUse **Connect public open data** in the sidebar to load curated indicators and datasets from the World Bank API or Our World in Data CSV downloads. Current catalogue examples include GDP, population, inflation, unemployment, agriculture value added, CO₂ emissions, internet use, electricity access and life expectancy. Connections are made on demand; the app records the provider, retrieval date and source link in the Overview workspace. No API key or account is required for these catalogue entries.\n\nThe public source must be reachable from the app host. Availability, update frequency, licensing and attribution are controlled by each provider; public endpoints may change or impose fair-use limits. Downloads are capped at 35 MB. The connector deliberately uses a reviewed catalogue rather than accepting arbitrary URLs.\n\n## Optional generative AI setup
+## Public open-data connections\n\nUse **Connect public open data** in the sidebar to load curated indicators and datasets from the World Bank API or Our World in Data CSV downloads. Current catalogue examples include GDP, population, inflation, unemployment, agriculture value added, CO₂ emissions, internet use, electricity access and life expectancy. Connections are made on demand; the app records the provider, retrieval date and source link in the Overview workspace. No API key or account is required for these catalogue entries.\n\nThe public source must be reachable from the app host. Availability, update frequency, licensing and attribution are controlled by each provider; public endpoints may change or impose fair-use limits. Downloads are capped at 35 MB. The connector deliberately uses a reviewed catalogue rather than accepting arbitrary URLs.\n\n## Browser-based AI assistant
+
+The Smart AI Assistant defaults to **Browser AI (open-source · no API key)**. It uses WebLLM with the Qwen 3.5 0.8B model by default, with a 2B option for more capable devices. Model inference runs inside the visitor’s browser through WebGPU; model/runtime files are downloaded from public sources on first use and cached by the browser where supported. Use a recent Chrome or Edge browser on a device with WebGPU enabled. First-time downloads can be large and performance depends on available GPU memory. If WebGPU is unavailable in the browser or embedded frame, use one of the optional providers below.
+
+## Optional hosted/local AI setup
 
 The analytical features and report builder work without an API key. To use generative responses with Ollama:
 
@@ -72,7 +76,7 @@ GitHub Actions runs the test suite and compile check on Python 3.11 and 3.12.
 ## Data handling and limitations
 
 - The app does not intentionally persist uploaded datasets in a database. Data is held in Streamlit session state and process memory while the session is active.
-- The optional external AI mode sends the user's question, recent conversation and compact schema/aggregate summaries to the configured provider; raw record rows are not included in that context. Do not use it with confidential data unless your governance rules permit the transfer.
+- Browser AI performs inference on the user’s device; prompts and included dataset summaries are not sent to an inference API. The browser must download the WebLLM runtime and model weights from public CDNs/model hosting on first use, and WebGPU-capable hardware/browser support is required. The optional hosted AI modes send the question, recent conversation and compact schema/aggregate summaries to the configured provider; raw record rows are not included in that context. Do not use hosted modes with confidential data unless your governance rules permit the transfer.
 - Do not upload personal, confidential, regulated or commercially sensitive information to a public demo.
 - Upload limits are application safeguards, not guarantees that every permitted file will fit the hosting platform's memory or execution limits.
 - The dataset quality score is a heuristic, not a certification. Analysis-readiness scores are workflow-specific checklists, not guarantees of statistical suitability.
