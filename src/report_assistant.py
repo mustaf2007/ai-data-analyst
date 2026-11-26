@@ -14,7 +14,12 @@ def _fmt(value):
     return str(value)
 
 
-def build_narrative_report(df: pd.DataFrame, source: str = "Uploaded dataset") -> dict:
+def build_narrative_report(
+    df: pd.DataFrame, source: str = "Uploaded dataset", *,
+    report_title: str = "Technical Data Analysis Report",
+    prepared_by: str = "", report_type: str = "General technical report",
+    purpose: str = "",
+) -> dict:
     """Create a structured Markdown report using calculations on the supplied data.
 
     The function does not infer causality or statistical significance. It reports
@@ -163,7 +168,8 @@ def build_narrative_report(df: pd.DataFrame, source: str = "Uploaded dataset") -
         "are not established by these calculations."
     )
     md = [
-        "# Data Analysis Report", f"**Source:** {source}",
+        f"# {report_title}", f"**Report type:** {report_type}",
+        f"**Source:** {source}", f"**Prepared by:** {prepared_by or 'Not specified'}",
         f"**Dataset size:** {profile['rows']:,} rows × {profile['columns']:,} columns",
         "", "## Executive summary", executive,
         "", "## Data quality and coverage", quality,
@@ -177,7 +183,7 @@ def build_narrative_report(df: pd.DataFrame, source: str = "Uploaded dataset") -
     md.extend([f"- {item}" for item in recommendations])
     md += ["", "## Methodology and limitations", methodology]
     return {
-        "title": "Data Analysis Report", "source": source,
+        "title": report_title, "source": source, "report_type": report_type,\n        "prepared_by": prepared_by, "purpose": purpose,
         "executive_summary": executive, "methodology": methodology,
         "findings": findings, "recommendations": recommendations,
         "numeric_summary": numeric_table, "category_summary": category_table,
