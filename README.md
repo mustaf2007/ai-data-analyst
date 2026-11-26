@@ -128,4 +128,4 @@ Choose **Free hosted AI (automatic fallback)** and enter a Groq, OpenRouter or G
 
 Hosted providers receive the user's question, recent conversation and schema metadata. Review the selected provider's privacy terms and usage limits before sending questions. API charges or free-tier quotas may apply. The model-free assistant remains available if no provider is configured or a provider is unavailable.
 
-The chatbot can answer a broad range of questions **that can be supported by the loaded table**; it is not a guarantee that every possible question is answerable. Ambiguous, unsupported or unavailable information should be clarified rather than fabricated.
+The chatbot can answer a broad range of questions **that can be supported by the loaded table**; it is not a guarantee that every possible question is answerable. Ambiguous, unsupported or unavailable information should be clarified rather than fabricated. Recent turns are retained within the active Streamlit session to help resolve follow-up questions; loading a different dataset clears the chat.
