@@ -83,7 +83,7 @@ def _correlations(df):
     return pd.DataFrame(rows).sort_values("Pearson r", key=lambda x: x.abs(), ascending=False) if rows else pd.DataFrame()
 
 
-def _choose_test(df, question):
+def _choose_test(df, question, alpha=0.05):
     numeric = df.select_dtypes(include="number").columns.tolist()
     categorical = [c for c in df.columns if not pd.api.types.is_numeric_dtype(df[c])
                    and 1 < df[c].nunique(dropna=True) <= 20]
@@ -114,7 +114,7 @@ def _choose_test(df, question):
                           effect_size=float(d) if np.isfinite(d) else None,
                           effect_size_name="Cohen's d (approx.)",
                           interpretation=("Evidence of a difference in group means at alpha=0.05; this is not proof of causation."
-                                          if test.pvalue < .05 else
+                                          if test.pvalue < alpha else
                                           "Insufficient evidence of a difference in group means at alpha=0.05."),
                           method="Welch's independent-samples t-test, two-sided; unequal variances are not assumed.")
             if min(map(len, samples)) < 5:
@@ -196,7 +196,7 @@ def _charts(df, question):
     return charts
 
 
-def _recommendations(profile, test, correlations, categories):
+def _recommendations(profile, test, correlations, categories, alpha=0.05):
     recs = []
     if profile["missing_cells"]:
         recs.append({"Priority": "High", "Recommendation": "Investigate missingness patterns and causes before imputation or modelling.",
@@ -205,7 +205,7 @@ def _recommendations(profile, test, correlations, categories):
         recs.append({"Priority": "Medium", "Recommendation": "Review duplicated records against source identifiers and collection procedures before removing them.",
                      "Evidence": f'{profile["duplicate_rows"]:,} exact duplicate rows.'})
     if test.get("p_value") is not None:
-        recs.append({"Priority": "High" if test["p_value"] < .05 else "Medium",
+        recs.append({"Priority": "High" if test["p_value"] < alpha else "Medium",
                      "Recommendation": "Validate the study design and assumptions, then investigate the observed group difference or association with domain context.",
                      "Evidence": f'{test["test"]}: p={test["p_value"]:.4g}; effect size {test.get("effect_size_name") or "not available"}={_fmt(test.get("effect_size"))}.'})
     if not recs:
@@ -233,7 +233,7 @@ def build_research_report(df: pd.DataFrame, research_question: str, *,
     numeric = _numeric_summary(df)
     categories = _category_summary(df)
     correlations = _correlations(df)
-    test = _choose_test(df, research_question)
+    test = _choose_test(df, research_question, alpha=alpha)
     if test.get("p_value") is not None:
         test["significant_at_alpha"] = bool(test["p_value"] < alpha)
         test["alpha"] = alpha
@@ -242,7 +242,7 @@ def build_research_report(df: pd.DataFrame, research_question: str, *,
         else:
             test["interpretation"] = test["interpretation"].replace("alpha=0.05", f"alpha={alpha:g}")
     charts = _charts(df, research_question)
-    recommendations = _recommendations(profile, test, correlations, categories)
+    recommendations = _recommendations(profile, test, correlations, categories, alpha=alpha)
     findings = [
         f"The dataset contains {profile['rows']:,} records and {profile['columns']:,} variables.",
         f"{profile['missing_cells']:,} cells are missing ({profile['missing_pct']:.1f}% of all cells); {profile['duplicate_rows']:,} exact duplicate rows were detected.",
