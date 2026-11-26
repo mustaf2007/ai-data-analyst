@@ -58,7 +58,7 @@ def _setting(name: str, default: str = "") -> str:
 
 def default_assistant_provider() -> str:
     """Use the no-API-key open-source model path by default."""
-    return "Free hosted AI (automatic fallback)"
+    return "Browser AI (open-source · no API key)"
 
 
 def _post_json(url: str, payload: dict, headers: dict | None = None, timeout: int = 90) -> dict:
