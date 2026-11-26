@@ -4,6 +4,7 @@ from __future__ import annotations
 import pandas as pd
 
 from analytics import profile_dataset
+from financial_reporting import build_financial_performance_analysis
 
 
 def _fmt(value):
@@ -169,6 +170,9 @@ def build_narrative_report(
         "sampling representativeness, units, measurement validity and data provenance "
         "are not established by these calculations."
     )
+    financial_analysis = (build_financial_performance_analysis(df)
+                         if "financial" in report_type.lower() or "investment" in report_type.lower()
+                         else {"available": False, "reason": "Not requested for this report type."})
     md = [
         f"# {report_title}", f"**Report type:** {report_type}",
         f"**Source:** {source}", f"**Prepared by:** {prepared_by or 'Not specified'}",
@@ -183,6 +187,8 @@ def build_narrative_report(
            "", "## Strongest pairwise correlations", markdown_table(correlation_table),
            "", "## Recommended next steps"]
     md.extend([f"- {item}" for item in recommendations])
+    if "financial" in report_type.lower() or "investment" in report_type.lower():
+        md += ["", financial_analysis.get("markdown", "## Financial analysis\\nNot enough explicit financial fields were detected.")]
     md += ["", "## Methodology and limitations", methodology]
     return {
         "title": report_title, "source": source, "report_type": report_type,
@@ -191,5 +197,5 @@ def build_narrative_report(
         "findings": findings, "recommendations": recommendations,
         "numeric_summary": numeric_table, "category_summary": category_table,
         "correlations": correlation_table, "markdown": "\n".join(md),
-        "profile": profile,
+        "profile": profile, "financial_analysis": financial_analysis,
     }
