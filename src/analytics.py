@@ -49,6 +49,16 @@ def load_dataset(filename: str, content: bytes) -> pd.DataFrame:
     # Pandas may already disambiguate duplicate CSV headers; this second pass
     # handles XLSX headers and collisions created by whitespace/blank normalization.
     df.columns = _make_unique_column_names(df.columns)
+
+    # Treat empty and whitespace-only text cells consistently as missing values.
+    # CSV readers recognize empty fields, but spreadsheet cells and strings such
+    # as "   " can otherwise bypass missingness diagnostics and imputation.
+    for column in df.select_dtypes(include=["object", "string"]).columns:
+        df[column] = df[column].map(
+            lambda value: pd.NA
+            if isinstance(value, str) and not value.strip()
+            else value
+        )
     return df
 
 def profile_dataset(df: pd.DataFrame) -> dict:
