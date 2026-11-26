@@ -302,6 +302,7 @@ def _markdown_report(r):
     lines += [f"- {x}" for x in r["findings"]]
     lines += ["", "## Statistical analysis",
               f"- Test: {r['test']['test']}",
+              f"- Significance threshold (alpha): {r['alpha']:g}",
               f"- Method: {r['test']['method']}",
               f"- Sample size: {r['test']['n']:,}",
               f"- Statistic: {_fmt(r['test']['statistic'])}",
@@ -321,6 +322,7 @@ def build_research_excel(df, report):
     output = BytesIO()
     overview = pd.DataFrame([
         {"Metric": "Research question", "Value": report["research_question"]},
+        {"Metric": "Objectives", "Value": report["objectives"]},
         {"Metric": "Source", "Value": report["source"]},
         {"Metric": "Rows", "Value": report["profile"]["rows"]},
         {"Metric": "Columns", "Value": report["profile"]["columns"]},
@@ -370,6 +372,7 @@ def build_research_pdf(report):
     styles.add(ParagraphStyle(name="ResearchSmall", parent=styles["BodyText"], fontSize=7, leading=9))
     story = [Paragraph(escape(report["title"]), styles["Title"]),
              Paragraph("Research question: " + escape(report["research_question"]), styles["ResearchBody"]),
+             Paragraph("Objectives: " + escape(report["objectives"]), styles["ResearchBody"]) if report["objectives"] else Spacer(1, 0),
              Paragraph("Source: " + escape(str(report["source"])) + " | Prepared by: " + escape(report["prepared_by"] or "Not specified"), styles["ResearchSmall"]),
              Spacer(1, 5*mm)]
     def para(text, style="ResearchBody"):
@@ -393,7 +396,9 @@ def build_research_pdf(report):
     para("Key findings", "Heading2")
     for item in report["findings"]: para("• " + item)
     para("Statistical analysis", "Heading2")
-    for key in ["test", "method", "n", "statistic", "p_value", "effect_size_name", "effect_size", "interpretation"]:
+    for key in ["test", "outcome", "group", "method", "n", "statistic", "p_value", "effect_size_name", "effect_size", "interpretation"]:
+        if key == "method":
+            para(f"Significance threshold (alpha): {report['alpha']:g}")
         para(f"{key.replace('_',' ').title()}: {_fmt(report['test'].get(key))}")
     para("Numeric summary", "Heading2"); add_table(report["numeric_summary"])
     para("Category summary", "Heading2"); add_table(report["category_summary"])
