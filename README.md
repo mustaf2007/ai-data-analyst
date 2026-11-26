@@ -14,10 +14,10 @@ The interface is organised into six workspaces:
 | **Prepare** | Data-quality checks, analysis readiness, cleaning and cleaning audit |
 | **Analyze** | Descriptive exploration, correlations, Chart Studio, time series, statistical tests, geographic summaries, dataset comparison and automated insights |
 | **Models** | Baseline Random Forest regression/classification and Isolation Forest anomaly screening |
-| **Reports** | Research Report Builder plus configurable PDF and Excel exports |
+| **Reports** | Research Report Builder, specialist technical/financial reports, and configurable PDF/Excel exports |
 | **Assistant** | Deterministic Ask the Data and optional generative Smart AI Assistant |
 
-Related tools are grouped into secondary tabs. The overlapping standalone narrative-report screen has been removed; report creation is consolidated under **Reports**.
+Related tools are grouped into secondary tabs. Specialist report types remain available alongside the research report and general-purpose exports.
 
 ## Main capabilities
 
@@ -29,6 +29,7 @@ Related tools are grouped into secondary tabs. The overlapping standalone narrat
 - **Dataset comparison:** compare a second uploaded dataset with the active dataset, including schema and indicator/distribution differences.
 - **Baseline modelling:** local Random Forest regression/classification and Isolation Forest screening. These are exploratory baselines, not production model governance.
 - **Research Report Builder:** enter a research question and objectives to produce descriptive evidence, question-guided statistical screening, effect sizes, automatically generated charts, methodology, limitations and prioritised recommendations. Download a formatted PDF, Markdown report and multi-sheet Excel evidence workbook with source data and chart-ready tables. The workflow uses local calculations and does not require an AI API key.
+- **Specialist reports:** generate technical, financial/investment, research/policy, monitoring/evaluation or market/business reports. When explicit portfolio fields are available, financial metrics and holdings attribution are included in PDF and Excel outputs.
 - **Financial report support:** when explicit, unambiguous portfolio fields are present, financial reporting can distinguish total-portfolio and invested-sleeve performance and report fees without deducting them twice.
 - **Assistant options:** Ask the Data provides deterministic answers from supported dataset calculations. Smart AI Assistant supports Ollama (no API key; local/self-hosted model required), an offline dataset-tools fallback, and an optional OpenAI-compatible endpoint.
 
