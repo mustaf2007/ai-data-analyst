@@ -23,3 +23,11 @@ def test_browser_ai_uses_fallback_theme_for_unknown_theme():
     html = build_browser_ai_html("", "not-a-theme")
     assert "#2563eb" in html
     assert 'const DATASET_CONTEXT = "";' in html
+
+
+def test_browser_ai_disables_stale_model_after_load_failure_and_explains_fallback():
+    html = build_browser_ai_html("", "Light")
+    assert "activeModel = null" in html
+    assert "Model not loaded" in html
+    assert "Dataset tools (no AI server)" in html
+    assert "loadButton.disabled = value || !supported" in html
