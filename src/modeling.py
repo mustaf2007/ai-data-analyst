@@ -70,8 +70,19 @@ def train_predictive_model(df,target,task="Auto-detect",test_size=.2,random_stat
     return {"task":task,"metrics":metrics,"comparison":pd.DataFrame({"actual":np.asarray(yv),"predicted":np.asarray(pred)}),"model":pipe,"features":x.columns.tolist(),"dropped_high_cardinality":high}
 
 def detect_anomalies(df,contamination=.05):
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        raise ValueError("Load a non-empty dataset before detecting anomalies.")
+    if not isinstance(contamination, (int, float)) or not 0 < float(contamination) <= 0.5:
+        raise ValueError("Expected anomaly share must be greater than 0 and no more than 0.5.")
+    reserved = {"anomaly_flag", "anomaly_score"} & set(df.columns)
+    if reserved:
+        raise ValueError(
+            "The dataset already contains reserved anomaly output column(s): "
+            + ", ".join(sorted(reserved)) + ". Rename them before running anomaly detection."
+        )
     n=df.select_dtypes(include=np.number)
-    if n.shape[1]<1 or len(n)<10: raise ValueError("Anomaly detection requires numeric data and at least 10 rows.")
+    if n.shape[1]<1 or len(n)<10:
+        raise ValueError("Anomaly detection requires at least one numeric column and 10 rows.")
     x=n.replace([np.inf,-np.inf],np.nan).fillna(n.median()).fillna(0)
     model=IsolationForest(contamination=contamination,random_state=42,n_estimators=150)
     labels=model.fit_predict(x); out=df.copy()
