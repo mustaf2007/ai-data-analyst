@@ -19,7 +19,8 @@ Related workflows are nested under these workspaces. When a dataset is replaced 
 
 - `src/analytics.py`: file validation, profiling, cleaning, descriptive summaries, correlation, time-series, geographic summaries, statistical tests and insight generation.
 - `src/modeling.py`: preprocessing pipelines, Random Forest regression/classification and Isolation Forest.
-- `src/reporting.py`: configurable PDF report generation and assistant-response PDF rendering.
+- `src/reporting.py`: configurable PDF report generation, financial attribution sections and assistant-response PDF rendering.
+- `src/report_assistant.py`: deterministic narrative report assembly and financial-report integration.
 - `src/research_reporting.py`: research-question-guided variable matching, descriptive evidence, cautious statistical test selection, chart construction and PDF/Excel/Markdown research exports.
 - `src/financial_reporting.py`: conservative financial performance metrics when required portfolio fields are explicit and unambiguous.
 - `src/assistant.py`: deterministic analysis suggestions and dataset question answering.
