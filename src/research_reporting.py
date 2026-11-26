@@ -88,7 +88,9 @@ def _choose_test(df, question):
     categorical = [c for c in df.columns if not pd.api.types.is_numeric_dtype(df[c])
                    and 1 < df[c].nunique(dropna=True) <= 20]
     q = _tokens(question)
-    target_matches = _match_columns(question, numeric + categorical)
+    target_matches = _match_columns(question, numeric)
+    if not target_matches:
+        target_matches = _match_columns(question, categorical)
     target = target_matches[0] if target_matches else None
     group_matches = [c for c in _match_columns(question, categorical) if c != target]
     if not group_matches:
