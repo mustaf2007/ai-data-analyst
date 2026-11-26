@@ -38,7 +38,7 @@ def test_dataset_context_includes_grouped_aggregates():
 def test_default_provider_does_not_require_api_key(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
-    assert default_assistant_provider() == "Ollama (local model)"
+    assert default_assistant_provider() == "Free hosted AI (automatic fallback)"
 
 
 
