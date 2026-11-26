@@ -18,7 +18,8 @@ from analytics import (
 )
 from modeling import train_predictive_model, detect_anomalies
 from reporting import build_pdf_report
-from assistant import suggest_analyses, answer_dataset_question\nfrom report_assistant import build_narrative_report
+from assistant import suggest_analyses, answer_dataset_question
+from report_assistant import build_narrative_report
 
 st.set_page_config(page_title="AI Data Analyst", page_icon="📊", layout="wide")
 st.title("📊 AI Data Analyst")
