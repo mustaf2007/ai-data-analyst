@@ -183,7 +183,8 @@ def build_narrative_report(
     md.extend([f"- {item}" for item in recommendations])
     md += ["", "## Methodology and limitations", methodology]
     return {
-        "title": report_title, "source": source, "report_type": report_type,\n        "prepared_by": prepared_by, "purpose": purpose,
+        "title": report_title, "source": source, "report_type": report_type,
+        "prepared_by": prepared_by, "purpose": purpose,
         "executive_summary": executive, "methodology": methodology,
         "findings": findings, "recommendations": recommendations,
         "numeric_summary": numeric_table, "category_summary": category_table,
