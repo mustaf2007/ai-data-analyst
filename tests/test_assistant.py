@@ -112,3 +112,43 @@ def test_chatbot_answers_dataset_wide_quality_risks():
     assert findings.loc["Blank text values", "status"] == "Review"
     assert findings.loc["Constant or empty columns", "status"] == "Review"
     assert "screen" in result["answer"].lower()
+
+
+def test_temporal_trend_uses_year_and_month_columns():
+    df = pd.DataFrame({
+        "Year": [2022, 2022, 2023, 2023, 2024, 2024],
+        "Month": ["January", "February"] * 3,
+        "Food": [100, 120, 130, 150, 160, 180],
+        "Oil": [50, 55, 60, 65, 70, 75],
+    })
+    result = answer_dataset_question(df, "How have Food imports changed over time?")
+    assert result["intent"] == "temporal"
+    assert result["evidence"]["period"].tolist() == ["2022-01", "2022-02", "2023-01", "2023-02", "2024-01", "2024-02"]
+    assert result["evidence"].iloc[0]["Food"] == 100
+    assert result["evidence"].iloc[-1]["Food"] == 180
+    assert "increased" in result["answer"]
+
+
+def test_temporal_trend_handles_numeric_months_and_zero_baseline():
+    df = pd.DataFrame({"year": [2024, 2024, 2025], "month": [1, 2, 1], "exports": [0, 10, 20]})
+    result = answer_dataset_question(df, "Show the exports trend")
+    assert result["intent"] == "temporal"
+    assert "starting value is zero" in result["answer"]
+    assert pd.isna(result["evidence"]["percentage_change"].iloc[1])
+
+
+def test_correlation_excludes_detected_year_and_month_dimensions():
+    df = pd.DataFrame({
+        "Year": [2022, 2023, 2024, 2025], "Month": ["Jan", "Feb", "Mar", "Apr"],
+        "Food": [10, 20, 30, 40], "Oil": [100, 80, 60, 40],
+    })
+    result = answer_dataset_question(df, "What are the strongest correlations?")
+    assert result["intent"] == "correlation"
+    variables = set(result["evidence"]["variable_1"]) | set(result["evidence"]["variable_2"])
+    assert "Year" not in variables and "Month" not in variables
+
+
+def test_year_detection_does_not_treat_arbitrary_numeric_id_as_time():
+    df = pd.DataFrame({"record_id": [2022, 2023, 2024], "sales": [1, 2, 3]})
+    result = answer_dataset_question(df, "Show the sales trend")
+    assert result["intent"] == "unsupported"
