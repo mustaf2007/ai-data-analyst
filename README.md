@@ -2,7 +2,7 @@
 
 A local-first analytics workspace for CSV and Excel datasets. Prepare data, explore patterns, test relationships, build baseline models, and produce evidence-based reports from one streamlined interface.
 
-**Core analysis does not require an AI API key.** Data processing, statistical analysis, charts, and report generation run with Python libraries. The optional Smart AI Assistant can use a local or self-hosted Ollama model; an OpenAI-compatible API is an explicitly optional alternative.
+**Core analysis and public open-data connections do not require an API key.** Data processing, statistical analysis, charts, and report generation run with Python libraries. The optional Smart AI Assistant can use curated free hosted AI providers (provider keys are required), a local or self-hosted Ollama model, or an OpenAI-compatible API.
 
 ## Workspace guide
 
@@ -21,7 +21,7 @@ Related tools are grouped into secondary tabs. Specialist report types remain av
 
 ## Main capabilities
 
-- **Safe data intake:** CSV/XLSX upload, duplicate-header normalization, and safeguards of 20 MB, 250,000 rows and 150 columns.
+- **Safe data intake:** CSV/XLSX upload, duplicate-header normalization, and safeguards of 20 MB, 250,000 rows and 150 columns. The sidebar also connects directly to curated World Bank Open Data and Our World in Data datasets without API keys, then loads the retrieved table into the same analysis workspace.
 - **Data quality and cleaning:** missingness and duplicate checks, column diagnostics, analysis-readiness checklists, controlled cleaning options, before/after audit and cleaned-data export. The original upload remains available for reset.
 - **Exploration and visualisation:** descriptive statistics, category frequencies, histograms, box plots, grouped summaries, date trends, correlation matrices and custom charts with HTML/PNG/SVG export where supported.
 - **Statistical analysis:** one-sample and Welch t-tests, one-way ANOVA, chi-square tests, effect sizes, confidence intervals and assumption/sparse-count warnings where applicable.
@@ -48,9 +48,9 @@ pip install -r requirements-dev.txt
 streamlit run app.py
 ```
 
-Open the local URL printed by Streamlit. Choose **Load built-in sample** from the sidebar to explore the app without uploading a file.
+Open the local URL printed by Streamlit. Choose **Load built-in sample** from the sidebar to explore the app without uploading a file, or expand **Connect public open data** to retrieve a public World Bank or Our World in Data dataset without credentials.
 
-## Optional generative AI setup
+## Public open-data connections\n\nUse **Connect public open data** in the sidebar to load curated indicators and datasets from the World Bank API or Our World in Data CSV downloads. Current catalogue examples include GDP, population, inflation, unemployment, agriculture value added, CO₂ emissions, internet use, electricity access and life expectancy. Connections are made on demand; the app records the provider, retrieval date and source link in the Overview workspace. No API key or account is required for these catalogue entries.\n\nThe public source must be reachable from the app host. Availability, update frequency, licensing and attribution are controlled by each provider; public endpoints may change or impose fair-use limits. Downloads are capped at 35 MB. The connector deliberately uses a reviewed catalogue rather than accepting arbitrary URLs.\n\n## Optional generative AI setup
 
 The analytical features and report builder work without an API key. To use generative responses with Ollama:
 
