@@ -22,6 +22,7 @@ from assistant import suggest_analyses, answer_dataset_question
 from research_reporting import build_research_report, build_research_excel, build_research_pdf
 from report_assistant import build_narrative_report
 from smart_assistant import ask_smart_assistant, build_dataset_context, default_assistant_provider
+from hybrid_chatbot import answer_hybrid_question
 from browser_ai import build_browser_ai_html
 from open_sources import list_open_datasets, load_open_dataset
 from session_state import clear_dataset_derived_state
@@ -170,6 +171,7 @@ def initialise_state():
         "chat_history": [],
         "chat_context": None,
         "smart_chat_history": [],
+        "hybrid_chat_provider": "Free hosted AI (automatic fallback)",
         "smart_chat_context": None,
         "open_source_metadata": None,
     }
@@ -1719,8 +1721,36 @@ with tabs[5]:
 
     with assistant_tabs[0]:
         st.subheader("Ask your data")
-        st.caption("A local-first assistant that answers supported questions using calculations on the active dataset. No external AI service or paid API is used.")
-        st.markdown("Try: *What is the average sales?* · *Which region has the highest sales?* · *How many missing values?* · *What are the strongest correlations?*")
+        chat_mode = st.selectbox(
+            "Analysis mode",
+            ["Hybrid AI (choose provider)", "Model-free (no AI service)"],
+            index=0,
+            key="dataset_chat_mode",
+            help="Hybrid AI interprets natural-language questions; pandas calculates and verifies results. Model-free mode remains available without an API key.",
+        )
+        hybrid_provider = "Free hosted AI (automatic fallback)"
+        hybrid_keys = {}
+        if chat_mode == "Hybrid AI (choose provider)":
+            hybrid_provider = st.selectbox(
+                "AI provider",
+                ["Free hosted AI (automatic fallback)", "OpenAI-compatible API (opt-in)"],
+                key="hybrid_dataset_provider",
+                help="Choose a configured hosted provider. API usage may incur charges or be subject to free-tier quotas.",
+            )
+            if hybrid_provider == "Free hosted AI (automatic fallback)":
+                with st.expander("Connect a provider · API keys", expanded=True):
+                    st.caption("Keys are used for this Streamlit session only. You may instead configure GROQ_API_KEY, OPENROUTER_API_KEY or GEMINI_API_KEY as deployment secrets.")
+                    hybrid_keys = {
+                        "Groq": st.text_input("Groq API key", type="password", key="hybrid_groq_key"),
+                        "OpenRouter": st.text_input("OpenRouter API key", type="password", key="hybrid_openrouter_key"),
+                        "Google Gemini": st.text_input("Google Gemini API key", type="password", key="hybrid_gemini_key"),
+                    }
+                st.caption("The provider receives your question, column names, data types and missing/distinct counts—not raw dataset rows. Calculations and filtered previews are produced by pandas in the app.")
+            else:
+                st.caption("Configure OPENAI_API_KEY and optional OPENAI_BASE_URL / OPENAI_MODEL as Streamlit deployment secrets. The provider receives the question and dataset schema metadata, not raw rows.")
+        else:
+            st.caption("Model-free mode calculates supported questions directly from the active dataset. No AI API, model download or API key is required.")
+        st.markdown("Try: *What is the average sales?* · *Which region has the highest sales?* · *How have imports changed over time?* · *What are the strongest correlations?*")
         quick_prompts = [
             ("Dataset size", "How many rows and columns?"),
             ("Missing values", "How many missing values?"),
@@ -1738,16 +1768,34 @@ with tabs[5]:
                 evidence = message.get("evidence")
                 if isinstance(evidence, pd.DataFrame) and not evidence.empty:
                     st.dataframe(evidence, use_container_width=True, hide_index=True)
+                if message.get("provider"):
+                    st.caption(f"Analysis mode: {message['provider']}")
         typed_prompt = st.chat_input("Ask a question about your active dataset…", key="dataset_chat_input")
         prompt = typed_prompt or selected_prompt
         if prompt:
             st.session_state.chat_history.append({"role": "user", "content": prompt})
-            result = answer_dataset_question(df, prompt, context=st.session_state.chat_context)
-            st.session_state.chat_context = result.get("context", st.session_state.chat_context)
-            st.session_state.chat_history.append({
-                "role": "assistant", "content": result["answer"],
-                "evidence": result.get("evidence"),
-            })
+            try:
+                if chat_mode == "Hybrid AI (choose provider)":
+                    result = answer_hybrid_question(
+                        prompt, df, provider=hybrid_provider, free_api_keys=hybrid_keys,
+                        history=st.session_state.chat_history[:-1],
+                    )
+                    provider_label = f"Hybrid AI · {result.get('provider', hybrid_provider)}"
+                else:
+                    result = answer_dataset_question(df, prompt, context=st.session_state.chat_context)
+                    st.session_state.chat_context = result.get("context", st.session_state.chat_context)
+                    provider_label = "Model-free · pandas"
+                st.session_state.chat_history.append({
+                    "role": "assistant", "content": result["answer"],
+                    "evidence": result.get("evidence"),
+                    "provider": provider_label,
+                })
+            except (RuntimeError, ValueError, TypeError, KeyError) as exc:
+                st.session_state.chat_history.append({
+                    "role": "assistant",
+                    "content": f"Analysis could not be completed safely: {exc}",
+                    "evidence": pd.DataFrame(),
+                })
             st.rerun()
         if st.button("Clear conversation", key="clear_dataset_chat"):
             st.session_state.chat_history = []

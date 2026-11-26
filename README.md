@@ -112,3 +112,20 @@ requirements-dev.txt
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Hybrid dataset chatbot
+
+The **Ask your data** workspace offers two modes:
+
+- **Hybrid AI (choose provider):** a configured hosted model translates a natural-language question into a constrained JSON analysis plan. The app validates the plan and performs the calculations with pandas. Supported operations include schema inspection, descriptive summaries, aggregations, grouped rankings, filtering, correlations, chronological trends and basic data-quality checks.
+- **Model-free:** the existing deterministic assistant remains available without an AI provider or API key.
+
+The hybrid planner receives the question, recent chat context and dataset schema metadata (column names, data types, missing counts and distinct counts). It does not receive raw dataset rows. The application never executes model-generated Python, SQL or shell commands. Column names, operations, aggregation functions, filter operators and limits are validated before execution. A table of calculated evidence is returned with each supported answer.
+
+### Configure a provider
+
+Choose **Free hosted AI (automatic fallback)** and enter a Groq, OpenRouter or Google Gemini API key in the app, or configure `GROQ_API_KEY`, `OPENROUTER_API_KEY` or `GEMINI_API_KEY` as Streamlit secrets. Alternatively choose **OpenAI-compatible API (opt-in)** and configure `OPENAI_API_KEY`, with optional `OPENAI_BASE_URL` and `OPENAI_MODEL`.
+
+Hosted providers receive the user's question, recent conversation and schema metadata. Review the selected provider's privacy terms and usage limits before sending questions. API charges or free-tier quotas may apply. The model-free assistant remains available if no provider is configured or a provider is unavailable.
+
+The chatbot can answer a broad range of questions **that can be supported by the loaded table**; it is not a guarantee that every possible question is answerable. Ambiguous, unsupported or unavailable information should be clarified rather than fabricated. Recent turns are retained within the active Streamlit session to help resolve follow-up questions; loading a different dataset clears the chat.
