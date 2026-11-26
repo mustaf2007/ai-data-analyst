@@ -35,7 +35,7 @@ def test_dataset_context_includes_grouped_aggregates():
     assert "North" in context and "South" in context
 
 
-def test_default_provider_prefers_configured_api(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+def test_default_provider_does_not_require_api_key(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
-    assert default_assistant_provider() == "OpenAI-compatible API (opt-in)"
+    assert default_assistant_provider() == "Ollama (local model)"
