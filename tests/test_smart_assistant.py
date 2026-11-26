@@ -39,3 +39,44 @@ def test_default_provider_does_not_require_api_key(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
     assert default_assistant_provider() == "Ollama (local model)"
+
+
+
+def test_default_provider_uses_free_hosted_fallback():
+    assert default_assistant_provider() == "Free hosted AI (automatic fallback)"
+
+
+def test_free_provider_requires_at_least_one_key(monkeypatch):
+    for key in ("GROQ_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    with pytest.raises(RuntimeError, match="No free AI provider is configured"):
+        ask_smart_assistant(
+            "Explain regression",
+            provider="Free hosted AI (automatic fallback)",
+            free_api_keys={},
+        )
+
+
+def test_free_provider_falls_back_to_next_configured_provider(monkeypatch):
+    import smart_assistant
+
+    calls = []
+
+    def fake_post_json(url, payload, headers=None, timeout=90):
+        calls.append(url)
+        if "api.groq.com" in url:
+            raise RuntimeError("Groq temporarily unavailable")
+        return {"choices": [{"message": {"content": "A helpful answer."}}]}
+
+    monkeypatch.setattr(smart_assistant, "_post_json", fake_post_json)
+    result = ask_smart_assistant(
+        "Explain regression",
+        provider="Free hosted AI (automatic fallback)",
+        free_api_keys={
+            "Groq": "test-groq-key",
+            "OpenRouter": "test-openrouter-key",
+        },
+    )
+    assert result["answer"] == "A helpful answer."
+    assert result["provider"].startswith("OpenRouter")
+    assert len(calls) == 2
