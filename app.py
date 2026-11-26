@@ -22,6 +22,7 @@ from assistant import suggest_analyses, answer_dataset_question
 from research_reporting import build_research_report, build_research_excel, build_research_pdf
 from report_assistant import build_narrative_report
 from smart_assistant import ask_smart_assistant, build_dataset_context, default_assistant_provider
+from open_sources import list_open_datasets, load_open_dataset
 
 st.set_page_config(page_title="AI Data Analyst", page_icon="📊", layout="wide")
 st.markdown(
@@ -165,6 +166,7 @@ def initialise_state():
         "chat_context": None,
         "smart_chat_history": [],
         "smart_chat_context": None,
+        "open_source_metadata": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -183,6 +185,7 @@ def set_dataset(data, source, upload_signature=None):
     st.session_state.raw = data.copy(deep=True)
     st.session_state.active = data.copy(deep=True)
     st.session_state.source = source
+    st.session_state.open_source_metadata = None
     st.session_state.cleaning_report = None
     st.session_state.chart_exports = {}
     st.session_state.report_artifacts = None
@@ -230,6 +233,41 @@ with st.sidebar:
             set_dataset(sample_df, sample_path.name)
         except (OSError, DataInputError) as exc:
             st.error(f"Could not load built-in sample: {exc}")
+
+    with st.expander("Connect public open data", expanded=False):
+        public_catalog = list_open_datasets()
+        public_labels = {
+            f"{item['name']} · {item['category']}": source_id
+            for source_id, item in public_catalog.items()
+        }
+        selected_public_label = st.selectbox(
+            "Choose a public dataset",
+            list(public_labels),
+            key="public_data_source_choice",
+        )
+        selected_public_id = public_labels[selected_public_label]
+        selected_public = public_catalog[selected_public_id]
+        st.caption(selected_public["description"])
+        st.caption(
+            f"{selected_public['provider']} · {selected_public['access']} · "
+            "No API key or account required"
+        )
+        if st.button("Connect and load dataset", key="connect_public_dataset",
+                     use_container_width=True):
+            try:
+                with st.spinner(f"Connecting to {selected_public['provider']}…"):
+                    public_df, public_metadata = load_open_dataset(selected_public_id)
+                set_dataset(
+                    public_df,
+                    f"{public_metadata['name']} ({public_metadata['provider']})",
+                )
+                st.session_state.open_source_metadata = public_metadata
+                st.success(
+                    f"Connected: {public_metadata['rows']:,} records · "
+                    f"{public_metadata['columns']} variables"
+                )
+            except (RuntimeError, ValueError) as exc:
+                st.error(f"Could not load this public dataset: {exc}")
 
     if st.session_state.raw is not None and st.button("Reset to original", use_container_width=True):
         set_dataset(st.session_state.raw, st.session_state.source)
@@ -323,6 +361,16 @@ tabs = st.tabs(["Overview", "Prepare", "Analyze", "Models", "Reports", "Assistan
 
 with tabs[0]:
         st.subheader(st.session_state.source)
+        source_metadata = st.session_state.open_source_metadata
+        if source_metadata:
+            st.caption(
+                f"Open data source: {source_metadata['provider']} · "
+                f"{source_metadata['rows']:,} records · "
+                f"Retrieved {source_metadata['loaded_at'][:10]}"
+            )
+            st.markdown(
+                f"[View original source and documentation]({source_metadata['url']})"
+            )
         st.caption("Executive overview · Dataset health · Trends · Key patterns")
         metric_columns = st.columns(5)
         labels = ["Records", "Variables", "Missing cells", "Duplicate rows", "Quality score"]
