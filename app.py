@@ -165,7 +165,6 @@ def initialise_state():
         "chat_context": None,
         "smart_chat_history": [],
         "smart_chat_context": None,
-        "smart_report_artifacts": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -193,7 +192,6 @@ def set_dataset(data, source, upload_signature=None):
     st.session_state.chat_context = None
     st.session_state.smart_chat_history = []
     st.session_state.smart_chat_context = None
-    st.session_state.smart_report_artifacts = None
     if upload_signature is not None:
         st.session_state.upload_signature = upload_signature
     clear_derived_results()
