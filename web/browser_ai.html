@@ -105,7 +105,7 @@ loadButton.addEventListener("click", async () => {
     const webllm = await import("https://esm.run/@mlc-ai/web-llm@0.2.89");
     const progress = (report) => setProgress(report.text || "Loading model…", report.progress);
     if (!engine) engine = await webllm.CreateMLCEngine(model,{initProgressCallback:progress});
-    else await engine.reload(model,{initProgressCallback:progress});
+    else await engine.reload(model);
     $("progressWrap").style.display = "none"; $("modelState").textContent = "Ready · " + model;
     status.textContent = "Model ready on this device";
     $("notice").textContent = "Model ready. Prompts and included dataset summaries are processed in this browser. Model files are cached where browser storage permits; first download may take several minutes.";
