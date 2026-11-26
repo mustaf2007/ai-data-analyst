@@ -171,3 +171,54 @@ def build_pdf_report(
     ]
     doc.build(story)
     return buf.getvalue()
+
+
+def build_text_report_pdf(text, report_title="AI Smart Assistant | Technical Report", prepared_by=""):
+    """Render a Markdown-like assistant response as a clean, downloadable PDF."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+    from xml.sax.saxutils import escape
+    from io import BytesIO
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4, rightMargin=19 * mm, leftMargin=19 * mm,
+        topMargin=18 * mm, bottomMargin=18 * mm,
+    )
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(
+        name="TechnicalBody", parent=styles["BodyText"], fontSize=9,
+        leading=13, spaceAfter=6,
+    ))
+    styles.add(ParagraphStyle(
+        name="TechnicalH1", parent=styles["Heading1"], textColor=colors.HexColor("#17324D"),
+        spaceBefore=12, spaceAfter=7,
+    ))
+    styles.add(ParagraphStyle(
+        name="TechnicalH2", parent=styles["Heading2"], textColor=colors.HexColor("#245B7A"),
+        spaceBefore=9, spaceAfter=5,
+    ))
+    story = [Paragraph(escape(report_title), styles["Title"])]
+    if prepared_by:
+        story.append(Paragraph("Prepared by: " + escape(prepared_by), styles["Italic"]))
+    story.append(Spacer(1, 7 * mm))
+    for raw in str(text).splitlines():
+        line = raw.strip()
+        if not line:
+            story.append(Spacer(1, 2 * mm))
+            continue
+        if line.startswith("### "):
+            story.append(Paragraph(escape(line[4:]), styles["Heading3"]))
+        elif line.startswith("## "):
+            story.append(Paragraph(escape(line[3:]), styles["TechnicalH2"]))
+        elif line.startswith("# "):
+            story.append(Paragraph(escape(line[2:]), styles["TechnicalH1"]))
+        elif line.startswith(("- ", "* ")):
+            story.append(Paragraph("&#8226; " + escape(line[2:]), styles["TechnicalBody"]))
+        else:
+            story.append(Paragraph(escape(line), styles["TechnicalBody"]))
+    doc.build(story)
+    return buffer.getvalue()
