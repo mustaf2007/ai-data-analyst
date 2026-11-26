@@ -57,6 +57,9 @@ def train_predictive_model(df,target,task="Auto-detect",test_size=.2,random_stat
                 "Increase the test-set share or provide more observations per class."
             )
         strat=y
+    xt,xv,yt,yv=train_test_split(
+        x, y, test_size=float(test_size), random_state=random_state, stratify=strat
+    )
     if task=="Regression":
         model=RandomForestRegressor(n_estimators=120,max_depth=12,min_samples_leaf=2,random_state=random_state,n_jobs=-1)
         pipe=Pipeline([("prep",_prep(x)),("model",model)]).fit(xt,yt); pred=pipe.predict(xv)
