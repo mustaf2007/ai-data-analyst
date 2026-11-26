@@ -40,7 +40,7 @@ def build_pdf_report(
     report_title="AI Data Analyst | Analysis Report",
     prepared_by="", executive_summary="", methodology="",
     sections=None, cleaning_report=None, anomalies=None,
-    model_result=None, chart_images=None,
+    model_result=None, chart_images=None, financial_analysis=None,
 ):
     """Build a PDF report from selected analysis outputs and user-authored context."""
     selected = set(sections if sections is not None else [
@@ -144,6 +144,25 @@ def build_pdf_report(
                 "feature leakage, sampling, validation design and assumptions before use.",
                 styles["ReportNote"],
             ))
+
+    if financial_analysis is not None:
+        metrics = financial_analysis.get("metrics", {})
+        story.append(Paragraph("Financial performance attribution", styles["Heading2"]))
+        if metrics:
+            financial_rows = [["Metric", "Value"]]
+            financial_rows.extend([[str(key).replace("_", " ").title(), f"{value:,.4f}" if isinstance(value, (int, float)) else str(value)] for key, value in metrics.items()])
+            story.append(_table(financial_rows, font_size=7))
+        else:
+            story.append(Paragraph(
+                escape(financial_analysis.get("reason", "No financial metrics could be calculated from explicit dataset fields.")),
+                styles["ReportNote"],
+            ))
+        holdings = financial_analysis.get("holdings")
+        if holdings is not None and not holdings.empty:
+            story.append(Paragraph("Holdings attribution", styles["Heading3"]))
+            holdings_data = [list(map(str, holdings.columns))]
+            holdings_data.extend(holdings.head(30).round(3).astype(str).values.tolist())
+            story.append(_table(holdings_data, font_size=6))
 
     if "Dataset sample" in selected and df is not None and not df.empty:
         sample = df.head(12).iloc[:, :8].copy().fillna("")
