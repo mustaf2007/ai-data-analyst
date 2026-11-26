@@ -74,6 +74,79 @@ def _post_json(url: str, payload: dict, headers: dict | None = None, timeout: in
         raise RuntimeError(f"Could not reach the selected AI service: {exc}") from exc
 
 
+FREE_API_PROVIDERS = {
+    "Groq": {
+        "key_name": "GROQ_API_KEY",
+        "base_url": "https://api.groq.com/openai/v1",
+        "model_name": "GROQ_MODEL",
+        "default_model": "openai/gpt-oss-120b",
+    },
+    "OpenRouter": {
+        "key_name": "OPENROUTER_API_KEY",
+        "base_url": "https://openrouter.ai/api/v1",
+        "model_name": "OPENROUTER_MODEL",
+        "default_model": "openrouter/free",
+    },
+    "Google Gemini": {
+        "key_name": "GEMINI_API_KEY",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "model_name": "GEMINI_MODEL",
+        "default_model": "gemini-2.5-flash",
+    },
+}
+
+
+def _chat_completion(base_url: str, model: str, messages: list[dict], key: str) -> str:
+    """Call an OpenAI-compatible hosted chat endpoint."""
+    result = _post_json(
+        base_url.rstrip("/") + "/chat/completions",
+        {"model": model, "messages": messages, "temperature": 0.2},
+        headers={"Authorization": "Bearer " + key},
+    )
+    answer = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+    if isinstance(answer, list):
+        answer = "\\n".join(
+            str(part.get("text", "")) for part in answer if isinstance(part, dict)
+        )
+    answer = str(answer).strip()
+    if not answer:
+        raise RuntimeError("The AI provider returned an empty response.")
+    return answer
+
+
+def configured_free_providers(session_keys: dict | None = None) -> list[tuple[str, str, str]]:
+    """Return configured free-tier providers in preferred fallback order."""
+    session_keys = session_keys or {}
+    configured = []
+    for name, settings in FREE_API_PROVIDERS.items():
+        key = str(session_keys.get(name) or _setting(settings["key_name"], "")).strip()
+        if key:
+            model = _setting(settings["model_name"], settings["default_model"])
+            configured.append((name, key, model))
+    return configured
+
+
+def _ask_free_hosted_ai(messages: list[dict], session_keys: dict | None = None) -> dict:
+    """Try each configured free-tier provider until one responds."""
+    providers = configured_free_providers(session_keys)
+    if not providers:
+        raise RuntimeError(
+            "No free AI provider is configured. Add a Groq, OpenRouter, or Gemini API key "
+            "in the Free AI setup panel, or add it as a Streamlit deployment secret."
+        )
+    failures = []
+    for name, key, model in providers:
+        settings = FREE_API_PROVIDERS[name]
+        try:
+            answer = _chat_completion(settings["base_url"], model, messages, key)
+            return {"answer": answer, "provider": f"{name} · {model}"}
+        except (RuntimeError, ValueError, KeyError, IndexError) as exc:
+            failures.append(f"{name}: {exc}")
+    raise RuntimeError(
+        "All configured free AI providers were unavailable. " + " | ".join(failures)
+    )
+
+
 def ask_smart_assistant(
     question: str,
     history: list[dict] | None = None,
@@ -81,6 +154,7 @@ def ask_smart_assistant(
     provider: str = "Dataset tools (no AI server)",
     df: pd.DataFrame | None = None,
     context: dict | None = None,
+    free_api_keys: dict | None = None,
 ) -> dict:
     """Answer general or dataset-aware questions using the selected provider.
 
@@ -127,6 +201,9 @@ def ask_smart_assistant(
         if item.get("role") in {"user", "assistant"} and item.get("content"):
             messages.append({"role": item["role"], "content": str(item["content"])[:6000]})
     messages.append({"role": "user", "content": question})
+
+    if provider == "Free hosted AI (automatic fallback)":
+        return _ask_free_hosted_ai(messages, free_api_keys)
 
     if provider == "Ollama (local model)":
         base = _setting("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
