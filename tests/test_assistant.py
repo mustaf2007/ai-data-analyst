@@ -94,3 +94,21 @@ def test_chatbot_can_recommend_next_analysis_steps():
     assert result["intent"] == "recommendations"
     assert not result["evidence"].empty
     assert "Review missing values" in result["evidence"]["title"].tolist()
+
+
+
+def test_chatbot_answers_dataset_wide_quality_risks():
+    df = pd.DataFrame({
+        "year": [2022, 2023, 2023, 2024],
+        "imports": [100.0, None, 120.0, 130.0],
+        "category": ["Food", "Fuel", "Fuel", " "],
+        "constant": ["same", "same", "same", "same"],
+    })
+    result = answer_dataset_question(df, "What are the main data-quality risks?")
+    assert result["intent"] == "data_quality"
+    assert not result["evidence"].empty
+    findings = result["evidence"].set_index("check")
+    assert findings.loc["Missing values", "status"] == "Review"
+    assert findings.loc["Blank text values", "status"] == "Review"
+    assert findings.loc["Constant or empty columns", "status"] == "Review"
+    assert "screen" in result["answer"].lower()
