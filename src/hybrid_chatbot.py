@@ -42,7 +42,7 @@ def _schema_context(df: pd.DataFrame) -> str:
     }, ensure_ascii=False)
 
 
-def _provider_plan(question: str, df: pd.DataFrame, provider: str, free_api_keys: dict | None) -> tuple[dict, str]:
+def _provider_plan(question: str, df: pd.DataFrame, provider: str, free_api_keys: dict | None, history: list[dict] | None = None) -> tuple[dict, str]:
     system = (
         "You translate a user's question about a loaded tabular dataset into ONE JSON analytical plan. "
         "Return JSON only, no markdown. Never invent columns. Use only these operations: "
@@ -233,13 +233,14 @@ def answer_hybrid_question(
     df: pd.DataFrame,
     provider: str = "Free hosted AI (automatic fallback)",
     free_api_keys: dict | None = None,
+    history: list[dict] | None = None,
 ) -> dict:
     """Interpret a natural-language request with an LLM and calculate with pandas."""
     if not isinstance(df, pd.DataFrame) or df.empty:
         raise ValueError("Load a non-empty dataset before asking the hybrid assistant.")
     if not str(question or "").strip():
         raise ValueError("Enter a question about the active dataset.")
-    plan, provider_name = _provider_plan(question, df, provider, free_api_keys)
+    plan, provider_name = _provider_plan(question, df, provider, free_api_keys, history=history)
     result = _execute_plan(df, plan)
     result["provider"] = provider_name
     result["plan"] = {k: v for k, v in plan.items() if k in {
