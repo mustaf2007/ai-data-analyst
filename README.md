@@ -41,7 +41,7 @@ Python 3.11 or 3.12 is recommended.
 git clone https://github.com/mustaf2007/ai-data-analyst.git
 cd ai-data-analyst
 python -m venv .venv
-# Windows PowerShell: .venv\\Scripts\\Activate.ps1
+# Windows PowerShell: .venv\Scripts\Activate.ps1
 # macOS/Linux: source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r requirements-dev.txt
