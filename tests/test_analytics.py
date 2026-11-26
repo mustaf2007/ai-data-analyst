@@ -689,3 +689,11 @@ def test_dataset_state_invalidation_clears_all_dataset_dependent_results():
         "comparison_result": None,
         "comparison_signature": None,
     }
+
+
+def test_datetime_inference_includes_native_datetime_columns():
+    df = pd.DataFrame({
+        "observation_period": pd.date_range("2025-01-01", periods=3, freq="MS"),
+        "value": [10, 20, 30],
+    })
+    assert infer_datetime_columns(df) == ["observation_period"]
