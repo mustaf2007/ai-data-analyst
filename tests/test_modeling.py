@@ -88,3 +88,13 @@ def test_anomaly_detection_validates_contamination_and_reserved_columns():
         detect_anomalies(df, contamination=0.6)
     with pytest.raises(ValueError, match="reserved anomaly output"):
         detect_anomalies(pd.DataFrame({"x": range(20), "anomaly_flag": ["x"] * 20}))
+
+
+def test_anomaly_detection_rejects_only_constant_or_empty_numeric_features():
+    df = pd.DataFrame({
+        "constant": [5.0] * 12,
+        "empty": [np.nan] * 12,
+        "label": ["record"] * 12,
+    })
+    with pytest.raises(ValueError, match="at least one numeric feature with variation"):
+        detect_anomalies(df)
