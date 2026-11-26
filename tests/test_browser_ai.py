@@ -5,9 +5,13 @@ def test_browser_ai_template_is_fully_rendered():
     html = build_browser_ai_html("Revenue summary: 100", "Ocean")
     assert "__CONTEXT__" not in html
     assert "__PALETTE__" not in html
+    assert "Llama-3.2-1B-Instruct-q4f32_1-MLC" in html
     assert "Qwen3.5-0.8B-q4f16_1-MLC" in html
     assert "Qwen3.5-2B-q4f16_1-MLC" in html
     assert "navigator.gpu" in html
+    assert 'adapter.features?.has("shader-f16")' in html
+    assert "Selected model needs shader-f16" in html
+    assert "Compatibility · Llama 3.2 · 1B" in html
     assert "stream:true" in html
     assert "Revenue summary: 100" in html
     assert "--accent" in html
