@@ -120,6 +120,109 @@ def _answer_dataset_question(df: pd.DataFrame, question: str) -> dict:
     ]
     evidence = pd.DataFrame()
 
+    # A quality-risk question should produce a dataset-wide audit, not the
+    # generic unsupported-question message. All checks are deterministic.
+    quality_terms = (
+        "data quality", "quality risk", "quality issue", "quality problem",
+        "data risks", "data risk", "data issues", "data problems",
+        "data-quality", "quality of the data",
+    )
+    if any(term in low for term in quality_terms):
+        rows = []
+        total_cells = max(1, df.shape[0] * df.shape[1])
+        missing_count = int(df.isna().sum().sum())
+        duplicate_count = int(df.duplicated().sum())
+        blank_counts = {}
+        for col in df.select_dtypes(include=["object", "string"]).columns:
+            values = df[col].dropna().astype(str)
+            blanks = int(values.str.strip().eq("").sum())
+            if blanks:
+                blank_counts[str(col)] = blanks
+
+        def add_quality(risk, status, detail):
+            rows.append({"check": risk, "status": status, "finding": detail})
+
+        add_quality(
+            "Missing values",
+            "Review" if missing_count else "No issue detected",
+            f"{missing_count:,} missing cells ({missing_count / total_cells * 100:.2f}% of all cells).",
+        )
+        add_quality(
+            "Fully duplicated rows",
+            "Review" if duplicate_count else "No issue detected",
+            f"{duplicate_count:,} fully duplicated rows among {len(df):,} records. This does not detect repeated business keys.",
+        )
+        blank_total = sum(blank_counts.values())
+        add_quality(
+            "Blank text values",
+            "Review" if blank_total else "No issue detected",
+            f"{blank_total:,} whitespace-only values" +
+            (f" in: {', '.join(blank_counts)}." if blank_counts else "."),
+        )
+
+        constant_cols = [str(c) for c in df.columns if df[c].nunique(dropna=True) <= 1]
+        add_quality(
+            "Constant or empty columns",
+            "Review" if constant_cols else "No issue detected",
+            "Review: " + ", ".join(constant_cols) if constant_cols else "No constant or entirely empty columns detected.",
+        )
+
+        numeric_text_cols = []
+        for col in df.select_dtypes(include=["object", "string"]).columns:
+            values = df[col].dropna().astype(str).str.strip()
+            if len(values) >= 2 and pd.to_numeric(values, errors="coerce").notna().mean() >= 0.8:
+                numeric_text_cols.append(str(col))
+        add_quality(
+            "Numeric values stored as text",
+            "Review" if numeric_text_cols else "No issue detected",
+            "Possible numeric columns stored as text: " + ", ".join(numeric_text_cols)
+            if numeric_text_cols else "No likely numeric-as-text columns detected.",
+        )
+
+        infinite_cols = [
+            str(col) for col in numeric
+            if pd.Series(pd.to_numeric(df[col], errors="coerce")).isin([float("inf"), float("-inf")]).any()
+        ]
+        add_quality(
+            "Infinite numeric values",
+            "Review" if infinite_cols else "No issue detected",
+            "Infinite values found in: " + ", ".join(infinite_cols)
+            if infinite_cols else "No positive or negative infinite values detected.",
+        )
+
+        high_cardinality = [
+            str(col) for col in df.columns
+            if df[col].nunique(dropna=True) > max(50, int(len(df) * 0.8))
+        ]
+        add_quality(
+            "High-cardinality fields",
+            "Context check" if high_cardinality else "No issue detected",
+            "Review whether these fields are identifiers rather than analysis categories: " + ", ".join(high_cardinality)
+            if high_cardinality else "No unusually high-cardinality fields detected by the screening rule.",
+        )
+
+        evidence = pd.DataFrame(rows)
+        flagged = evidence[evidence["status"] != "No issue detected"]
+        if flagged.empty:
+            answer = (
+                f"The initial automated screen found no obvious structural data-quality risks in "
+                f"this dataset ({len(df):,} rows × {len(df.columns):,} columns). "
+                "This is not a guarantee of accuracy: verify units, definitions, source consistency, "
+                "valid ranges and whether repeated records are legitimate."
+            )
+        else:
+            findings = "; ".join(
+                f"{row['check'].lower()}: {row['finding']}"
+                for _, row in flagged.iterrows()
+            )
+            answer = (
+                f"The initial screen identified {len(flagged)} item(s) to review in this "
+                f"{len(df):,}-row, {len(df.columns)}-column dataset: {findings} "
+                "These are screening flags, not proof that the underlying records are wrong. "
+                "Also verify units, year/category consistency, definitions and source coverage."
+            )
+        return {"answer": answer, "evidence": evidence, "intent": "data_quality"}
+
     if any(term in low for term in ("missing", "null", "empty cells", "incomplete")):
         counts = df.isna().sum().sort_values(ascending=False)
         evidence = pd.DataFrame({"column": counts.index.astype(str), "missing": counts.values})
