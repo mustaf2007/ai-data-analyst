@@ -302,10 +302,16 @@ def build_trend_frame(df, time_column, value_column, parse_datetime=False):
 
 
 def infer_datetime_columns(df, threshold=.8):
-    result=[]
-    for c in df.select_dtypes(include=["object","string"]):
-        s=df[c].dropna().head(100)
-        if not s.empty and pd.to_datetime(s,errors="coerce").notna().mean()>=threshold: result.append(str(c))
+    # Native datetime columns are already parsed and should not need string inference.
+    result = [str(c) for c in df.select_dtypes(include=["datetime", "datetimetz"]).columns]
+    for c in df.select_dtypes(include=["object", "string"]):
+        s = df[c].dropna().head(100)
+        if (
+            not s.empty
+            and pd.to_datetime(s, errors="coerce").notna().mean() >= threshold
+            and str(c) not in result
+        ):
+            result.append(str(c))
     return result
 
 def generate_insights(df):
