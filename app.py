@@ -1244,7 +1244,7 @@ with tabs[3]:
         st.caption("Anomaly flags are screening signals, not proof of errors or fraud.")
 
 with tabs[4]:
-    report_tabs = st.tabs(["Research report","PDF & Excel export"])
+    report_tabs = st.tabs(["Research report", "Specialist report", "PDF & Excel export"])
 
     with report_tabs[0]:
         st.subheader("Research report builder")
