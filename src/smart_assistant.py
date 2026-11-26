@@ -50,6 +50,8 @@ def ask_smart_assistant(
     history: list[dict] | None = None,
     dataset_context: str = "",
     provider: str = "Dataset tools (no AI server)",
+    df: pd.DataFrame | None = None,
+    context: dict | None = None,
 ) -> dict:
     """Answer general or dataset-aware questions using the selected provider.
 
@@ -61,8 +63,10 @@ def ask_smart_assistant(
         raise ValueError("Enter a question first.")
 
     if provider == "Dataset tools (no AI server)":
-        result = answer_dataset_question_from_context(question)
-        return {"answer": result, "provider": provider}
+        if df is None:
+            return {"answer": "Load a dataset to use deterministic data questions. For general questions, select Ollama (local model) or configure an OpenAI-compatible API.", "provider": provider}
+        result = answer_dataset_question(df, question, context=context)
+        return {"answer": result["answer"], "provider": provider, "evidence": result.get("evidence"), "context": result.get("context")}
 
     system = (
         "You are a careful, professional AI research and data-analysis assistant. "
@@ -115,13 +119,3 @@ def ask_smart_assistant(
     raise ValueError("Select a supported assistant provider.")
 
 
-def answer_dataset_question_from_context(question: str) -> str:
-    """Dataset-only fallback for questions supported by the deterministic engine."""
-    # The caller uses the active Data tab for exact computed evidence. This fallback
-    # deliberately avoids guessing when no dataframe was passed to the service.
-    return (
-        "The no-server mode is limited to deterministic dataset questions in the "
-        "Ask the Data workspace. For general questions, select Ollama (local model) "
-        "or configure an OpenAI-compatible API. For accurate dataset answers, use "
-        "Ask the Data tab, which calculates directly from the active DataFrame."
-    )
