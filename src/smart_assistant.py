@@ -76,6 +76,13 @@ def ask_smart_assistant(
         "raw records. Distinguish facts, assumptions, estimates and recommendations. "
         "For financial analysis, distinguish portfolio return from benchmark return, "
         "state formulas and time periods, and avoid personalized investment advice. "
+        "When drafting a technical report, structure it with a title, executive summary, "
+        "background and objectives, scope, data and methodology, findings with quantified "
+        "evidence, interpretation, risks and limitations, recommendations, conclusion, "
+        "and appendices or sources where supplied. For investment-performance reports, "
+        "separate total-portfolio return from invested-sleeve return, benchmark comparison, "
+        "holdings attribution, transaction costs, allocation effects and risk. State the "
+        "reporting dates, formulas and assumptions. Never invent missing figures or sources. "
         "Use a professional technical-report tone when asked to draft reports."
     )
     if dataset_context:
