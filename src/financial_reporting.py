@@ -26,6 +26,9 @@ def _single_value(series):
     values = _numeric(series).dropna().unique()
     return float(values[0]) if len(values) == 1 else None
 
+def _usd(value):
+    return "USD " + format(value, ",.2f")
+
 def build_financial_performance_analysis(df: pd.DataFrame) -> dict:
     """Calculate only metrics supported by explicit, recognizable columns."""
     if not isinstance(df, pd.DataFrame) or df.empty:
@@ -77,19 +80,24 @@ def build_financial_performance_analysis(df: pd.DataFrame) -> dict:
 
     lines = ["## Financial and investment performance analysis"]
     if "portfolio_return_pct" in metrics:
-        lines.append(f"- **Total portfolio:** \${metrics['starting_capital']:,.2f} starting capital to \${metrics['ending_portfolio_value']:,.2f} ending value; net change \${metrics['portfolio_pnl']:,.2f} ({metrics['portfolio_return_pct']:.2f}%).")
+        lines.append("- **Total portfolio:** " + _usd(metrics["starting_capital"]) + " starting capital to " + _usd(metrics["ending_portfolio_value"]) + " ending value; net change " + _usd(metrics["portfolio_pnl"]) + " ({:.2f}%).".format(metrics["portfolio_return_pct"]))
     else:
         lines.append("- **Total portfolio return:** Not calculated. A unique, explicit starting-capital and ending-portfolio-value pair was not available.")
     if "invested_sleeve_return_pct" in metrics:
-        lines.append(f"- **Invested sleeve:** cost basis \${metrics['invested_sleeve_cost_basis']:,.2f}; market value \${metrics['invested_sleeve_market_value']:,.2f}; P&L \${metrics['invested_sleeve_pnl']:,.2f} ({metrics['invested_sleeve_return_pct']:.2f}%).")
+        lines.append("- **Invested sleeve:** cost basis " + _usd(metrics["invested_sleeve_cost_basis"]) + "; market value " + _usd(metrics["invested_sleeve_market_value"]) + "; P&L " + _usd(metrics["invested_sleeve_pnl"]) + " ({:.2f}%).".format(metrics["invested_sleeve_return_pct"]))
     else:
         lines.append("- **Invested-sleeve return:** Not calculated. Both cost-basis and market-value columns are required.")
     if "reported_fees" in metrics:
-        lines.append(f"- **Reported fees / brokerage:** \${metrics['reported_fees']:,.2f}. Whether these costs are already reflected in ending values is not established; they are not deducted again.")
+        lines.append("- **Reported fees / brokerage:** " + _usd(metrics["reported_fees"]) + ". Whether these costs are already reflected in ending values is not established; they are not deducted again.")
     if not holdings.empty:
-        lines += ["- **Holdings attribution:** Grouped cost basis versus market value; not a time-weighted or cash-flow-adjusted return.", holdings.to_markdown(index=False, floatfmt=",.2f")]
+        lines.append("- **Holdings attribution:** Grouped cost basis versus market value; not a time-weighted or cash-flow-adjusted return.")
+        headers = [str(c) for c in holdings.columns]
+        lines.extend(["| " + " | ".join(headers) + " |", "| " + " | ".join(["---"] * len(headers)) + " |"])
+        for row in holdings.itertuples(index=False, name=None):
+            cells = [format(v, ",.2f") if isinstance(v, (int, float)) else str(v) for v in row]
+            lines.append("| " + " | ".join(cells) + " |")
     if "benchmark_return_pct" in metrics:
-        lines.append(f"- **Benchmark return:** {metrics['benchmark_return_pct']:.2f}% (relative performance is not inferred without matching periods and definitions).")
+        lines.append("- **Benchmark return:** {:.2f}% (relative performance is not inferred without matching periods and definitions).".format(metrics["benchmark_return_pct"]))
     lines += ["", "**Interpretation limits:** Returns are simple value changes based on detected columns. Compatible dates, currency, cash flows, dividends, corporate actions, and fee treatment must be established. No annualization, time-weighted return, money-weighted return, risk-adjusted return, or causal attribution is inferred."]
     return {"available": bool(metrics), "detected_columns": {k: str(v) for k, v in cols.items() if v is not None},
             "metrics": metrics, "holdings": holdings, "markdown": "\n".join(lines),
