@@ -91,7 +91,7 @@ FREE_API_PROVIDERS = {
         "key_name": "GEMINI_API_KEY",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
         "model_name": "GEMINI_MODEL",
-        "default_model": "gemini-2.5-flash",
+        "default_model": "gemini-3.8-flash",
     },
 }
 
@@ -137,11 +137,29 @@ def _ask_free_hosted_ai(messages: list[dict], session_keys: dict | None = None) 
     failures = []
     for name, key, model in providers:
         settings = FREE_API_PROVIDERS[name]
-        try:
-            answer = _chat_completion(settings["base_url"], model, messages, key)
-            return {"answer": answer, "provider": f"{name} · {model}"}
-        except (RuntimeError, ValueError, KeyError, IndexError) as exc:
-            failures.append(f"{name}: {exc}")
+        models_to_try = [model]
+        # Recover automatically when an old Gemini model is no longer enabled
+        # for new projects or has been retired.
+        if name == "Google Gemini" and model != "gemini-3.8-flash":
+            models_to_try.append("gemini-3.8-flash")
+        for candidate_model in dict.fromkeys(models_to_try):
+            try:
+                answer = _chat_completion(
+                    settings["base_url"], candidate_model, messages, key
+                )
+                return {
+                    "answer": answer,
+                    "provider": f"{name} · {candidate_model}",
+                }
+            except (RuntimeError, ValueError, KeyError, IndexError) as exc:
+                failures.append(f"{name} ({candidate_model}): {exc}")
+                message = str(exc).lower()
+                if not (
+                    name == "Google Gemini"
+                    and candidate_model != "gemini-3.8-flash"
+                    and ("404" in message or "not_found" in message or "no longer available" in message)
+                ):
+                    break
     raise RuntimeError(
         "All configured free AI providers were unavailable. " + " | ".join(failures)
     )
