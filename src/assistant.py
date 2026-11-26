@@ -120,6 +120,80 @@ def _answer_dataset_question(df: pd.DataFrame, question: str) -> dict:
     ]
     evidence = pd.DataFrame()
 
+    # Dataset interpretation is generated from reproducible descriptive evidence.
+    # This path requires no language model, API key, GPU, or downloaded model.
+    interpretation_terms = (
+        "explain the most important patterns", "explain this dataset",
+        "interpret this dataset", "interpret the data", "what does this dataset tell",
+        "what can you tell me about this dataset", "summarize this dataset",
+        "summary of this dataset", "describe the dataset", "key findings",
+        "main patterns", "overall picture", "give me an overview",
+    )
+    if (
+        any(term in low for term in interpretation_terms)
+        and not any(term in low for term in ("correlation", "relationship between"))
+    ):
+        rows = []
+        numeric_summaries = []
+        for col in df.columns:
+            series = df[col]
+            non_missing = int(series.notna().sum())
+            missing = int(series.isna().sum())
+            row = {
+                "column": str(col),
+                "data_type": str(series.dtype),
+                "non_missing": non_missing,
+                "missing": missing,
+                "missing_pct": round(missing / max(1, len(df)) * 100, 2),
+                "unique_values": int(series.nunique(dropna=True)),
+            }
+            if pd.api.types.is_numeric_dtype(series):
+                values = pd.to_numeric(series, errors="coerce").dropna()
+                if not values.empty:
+                    row.update({
+                        "mean": float(values.mean()),
+                        "median": float(values.median()),
+                        "minimum": float(values.min()),
+                        "maximum": float(values.max()),
+                    })
+                    numeric_summaries.append(
+                        f"{col}: mean {values.mean():,.4g}, median {values.median():,.4g}, "
+                        f"range {values.min():,.4g} to {values.max():,.4g}"
+                    )
+            else:
+                top = series.astype("string").fillna("(Missing)").value_counts()
+                if not top.empty:
+                    row["most_common_value"] = str(top.index[0])
+                    row["most_common_count"] = int(top.iloc[0])
+            rows.append(row)
+        evidence = pd.DataFrame(rows)
+        missing_total = int(df.isna().sum().sum())
+        duplicate_total = int(df.duplicated().sum())
+        numeric_count = len(numeric)
+        categorical_count = len(categorical)
+        answer_parts = [
+            f"The active dataset contains {len(df):,} records and {len(df.columns):,} variables.",
+            f"It has {numeric_count} numeric variable(s) and {categorical_count} categorical variable(s) "
+            f"with between 2 and 200 distinct non-missing values.",
+            f"There are {missing_total:,} missing cells ({missing_total / max(1, len(df) * len(df.columns)) * 100:.1f}% of all cells) "
+            f"and {duplicate_total:,} fully duplicated rows.",
+        ]
+        if numeric_summaries:
+            answer_parts.append("Numeric highlights: " + "; ".join(numeric_summaries[:5]) + ".")
+        if categorical_count:
+            answer_parts.append(
+                "Categorical fields include: " + ", ".join(map(str, categorical[:8])) + "."
+            )
+        answer_parts.append(
+            "These are descriptive patterns in the loaded data, not evidence of causation. "
+            "Check variable definitions, units, coverage and source quality before drawing policy or business conclusions."
+        )
+        return {
+            "answer": " ".join(answer_parts),
+            "evidence": evidence,
+            "intent": "interpretation",
+        }
+
     # A quality-risk question should produce a dataset-wide audit, not the
     # generic unsupported-question message. All checks are deterministic.
     quality_terms = (

@@ -1756,17 +1756,17 @@ with tabs[5]:
 
     with assistant_tabs[1]:
         st.subheader("Smart AI Assistant")
-        st.caption("Ask general questions, explore your dataset, interpret analytical results, and draft technical reports.")
+        st.caption("Start with the model-free data assistant, or optionally switch to an on-device model or hosted AI service.")
         provider_options = [
-            "Browser AI (open-source · no API key)",
             "Dataset tools (no AI server)",
+            "Browser AI (open-source · no API key)",
             "Free hosted AI (automatic fallback)",
             "Ollama (local model)",
             "OpenAI-compatible API (opt-in)",
         ]
         provider = st.selectbox(
-            "AI model", provider_options,
-            help="Run an open-source model directly in your browser, or choose an optional hosted/local provider.",
+            "Assistant mode", provider_options,
+            help="The default mode calculates answers from your active dataset without loading a model or calling an AI API. Other modes are optional.",
             index=provider_options.index(default_assistant_provider()),
             key="smart_assistant_provider",
         )
@@ -1812,12 +1812,20 @@ with tabs[5]:
             else:
                 st.warning("This optional provider sends your question, recent chat context, and—when available—dataset column names and aggregate summaries, not raw dataset rows. Configure OPENAI_API_KEY and optional OPENAI_BASE_URL / OPENAI_MODEL as deployment secrets. Provider usage limits and charges may apply.")
     
-            smart_prompts = [
-                "Explain the most important patterns in this dataset.",
-                "What are the main data-quality risks?",
-                "Help me interpret the correlation results.",
-                "Draft a professional technical report outline for these data.",
-            ]
+            if provider == "Dataset tools (no AI server)":
+                smart_prompts = [
+                    "Explain the most important patterns in this dataset.",
+                    "What are the main data-quality risks?",
+                    "What are the strongest correlations?",
+                    "What should I analyse next?",
+                ]
+            else:
+                smart_prompts = [
+                    "Explain the most important patterns in this dataset.",
+                    "What are the main data-quality risks?",
+                    "Help me interpret the correlation results.",
+                    "Draft a professional technical report outline for these data.",
+                ]
             prompt_cols = st.columns(4)
             selected_smart_prompt = None
             for idx, suggestion in enumerate(smart_prompts):
@@ -1831,7 +1839,12 @@ with tabs[5]:
                     if isinstance(evidence, pd.DataFrame) and not evidence.empty:
                         st.dataframe(evidence, use_container_width=True, hide_index=True)
     
-            smart_input = st.chat_input("Ask anything: data, research, finance, policy, statistics, writing...", key="smart_assistant_chat_input")
+            chat_placeholder = (
+                "Ask a question about your active dataset..."
+                if provider == "Dataset tools (no AI server)"
+                else "Ask anything: data, research, finance, policy, statistics, writing..."
+            )
+            smart_input = st.chat_input(chat_placeholder, key="smart_assistant_chat_input")
             smart_question = smart_input or selected_smart_prompt
             if smart_question:
                 st.session_state.smart_chat_history.append({"role": "user", "content": smart_question})

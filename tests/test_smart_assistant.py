@@ -38,12 +38,12 @@ def test_dataset_context_includes_grouped_aggregates():
 def test_default_provider_does_not_require_api_key(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
-    assert default_assistant_provider() == "Browser AI (open-source · no API key)"
+    assert default_assistant_provider() == "Dataset tools (no AI server)"
 
 
 
-def test_default_provider_uses_browser_open_model():
-    assert default_assistant_provider() == "Browser AI (open-source · no API key)"
+def test_default_provider_uses_model_free_dataset_assistant():
+    assert default_assistant_provider() == "Dataset tools (no AI server)"
 
 
 def test_free_provider_requires_at_least_one_key(monkeypatch):
@@ -121,3 +121,21 @@ def test_dataset_tools_provider_answers_without_any_api_key(monkeypatch):
     assert result["provider"] == "Dataset tools (no AI server)"
     assert "20" in result["answer"]
     assert result["evidence"].iloc[0]["mean"] == 20
+
+
+def test_model_free_assistant_interprets_dataset_with_descriptive_evidence():
+    df = pd.DataFrame({
+        "year": [2021, 2022, 2023, 2024],
+        "gdp": [100.0, 110.0, 125.0, 140.0],
+        "country": ["A", "A", "B", "B"],
+    })
+    result = ask_smart_assistant(
+        "Explain the most important patterns in this dataset.",
+        provider="Dataset tools (no AI server)",
+        df=df,
+    )
+    assert result["provider"] == "Dataset tools (no AI server)"
+    assert "4 records and 3 variables" in result["answer"]
+    assert "Numeric highlights" in result["answer"]
+    assert result["evidence"].set_index("column").loc["gdp", "mean"] == 118.75
+    assert result["context"] is not None
