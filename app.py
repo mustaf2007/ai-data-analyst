@@ -19,7 +19,7 @@ from analytics import (
 from modeling import train_predictive_model, detect_anomalies
 from reporting import build_pdf_report
 from assistant import suggest_analyses, answer_dataset_question
-from report_assistant import build_narrative_report
+from report_assistant import build_narrative_report\nfrom smart_assistant import ask_smart_assistant, build_dataset_context
 
 st.set_page_config(page_title="AI Data Analyst", page_icon="📊", layout="wide")
 st.title("📊 AI Data Analyst")
@@ -131,7 +131,7 @@ def initialise_state():
         "report_artifacts": None,
         "narrative_report_artifacts": None,
         "chat_history": [],
-        "chat_context": None,
+        "chat_context": None,\n        "smart_chat_history": [],\n        "smart_chat_context": None,\n        "smart_report_artifacts": None,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -257,7 +257,7 @@ px.defaults.color_discrete_sequence = [accent_color, "#20a486", "#e09f3e", "#8b7
 tabs = st.tabs([
     "Dashboard", "Data quality", "Clean data", "Explore", "Relationships",
     "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights", "Data story", "Time-series intelligence", "Dataset comparison", "Geographic intelligence", "Statistical testing",
-    "Analysis suggestions", "Ask the data", "AI narrative report",
+    "Analysis suggestions", "Ask the data", "AI narrative report", "Smart AI assistant",
 ])
 
 with tabs[0]:
@@ -1372,13 +1372,35 @@ with tabs[17]:
         "Generate an evidence-led narrative from the active dataset. Findings are calculated "
         "locally; the report does not invent statistical significance, causality or forecasts."
     )
-    if st.button("Generate narrative report", type="primary", key="generate_narrative_report"):
+    with st.form("technical_report_settings"):
+        technical_title = st.text_input("Report title", "Portfolio / Dataset Technical Analysis Report")
+        technical_type = st.selectbox(
+            "Report type",
+            ["General technical report", "Financial / investment performance report",
+             "Research and policy report", "Monitoring and evaluation report",
+             "Market and business intelligence report"],
+        )
+        technical_author = st.text_input("Prepared by", "")
+        technical_purpose = st.text_area(
+            "Report purpose, background or analytical context (optional)",
+            placeholder="Describe the decision, assignment, reporting period, benchmark or key context...",
+            height=90,
+        )
+        generate_technical = st.form_submit_button("Generate professional technical report", type="primary")
+    if generate_technical:
         try:
-            narrative = build_narrative_report(df, st.session_state.source or "Active dataset")
+            narrative = build_narrative_report(
+                df, st.session_state.source or "Active dataset",
+                report_title=technical_title.strip() or "Technical Data Analysis Report",
+                prepared_by=technical_author.strip(),
+                report_type=technical_type,
+                purpose=technical_purpose.strip(),
+            )
             narrative_pdf = build_pdf_report(
                 st.session_state.source, df, p, numeric_summary(df),
                 narrative["findings"],
                 report_title=narrative["title"],
+                prepared_by=narrative["prepared_by"],
                 executive_summary=narrative["executive_summary"],
                 methodology=narrative["methodology"],
                 sections=[
@@ -1392,7 +1414,7 @@ with tabs[17]:
                 "xlsx": narrative_excel, "title": narrative["title"],
             }
         except (ValueError, TypeError, KeyError) as exc:
-            st.error(f"Narrative report could not be generated: {exc}")
+            st.error(f"Technical report could not be generated: {exc}")
 
     narrative_artifacts = st.session_state.get("narrative_report_artifacts")
     if narrative_artifacts:
@@ -1417,3 +1439,69 @@ with tabs[17]:
         )
     else:
         st.info("Generate the report to preview its findings and export Markdown, PDF and Excel files.")
+\n
+with tabs[18]:
+    st.subheader("Smart AI Assistant")
+    st.caption("Ask general questions, explore your dataset, interpret analytical results, and draft technical reports.")
+    provider = st.selectbox(
+        "Assistant engine",
+        ["Dataset tools (no AI server)", "Ollama (local model)", "OpenAI-compatible API (opt-in)"],
+        help="Dataset tools are free and deterministic. Ollama runs a model on your own machine/server. API mode sends your question and compact dataset summaries to the configured provider.",
+        key="smart_assistant_provider",
+    )
+    if provider == "Ollama (local model)":
+        st.info("Requires Ollama running at OLLAMA_BASE_URL (default http://localhost:11434) and a model set in OLLAMA_MODEL (default llama3.1:8b). On Streamlit Cloud, localhost refers to the cloud container, not your personal computer.")
+    elif provider == "OpenAI-compatible API (opt-in)":
+        st.warning("External processing is enabled only when you choose this option. The assistant sends your question, recent chat context, dataset column names and aggregate summaries—not raw dataset rows. Configure OPENAI_API_KEY and optional OPENAI_BASE_URL / OPENAI_MODEL as deployment secrets.")
+    else:
+        st.caption("No generative model is used in this mode. Answers are calculated directly from the active dataset; use the Ask the Data tab for supported questions.")
+
+    smart_prompts = [
+        "Explain the most important patterns in this dataset.",
+        "What are the main data-quality risks?",
+        "Help me interpret the correlation results.",
+        "Draft a professional technical report outline for these data.",
+    ]
+    prompt_cols = st.columns(4)
+    selected_smart_prompt = None
+    for idx, suggestion in enumerate(smart_prompts):
+        if prompt_cols[idx].button(suggestion, key=f"smart_prompt_{idx}", use_container_width=True):
+            selected_smart_prompt = suggestion
+
+    for message in st.session_state.smart_chat_history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            evidence = message.get("evidence")
+            if isinstance(evidence, pd.DataFrame) and not evidence.empty:
+                st.dataframe(evidence, use_container_width=True, hide_index=True)
+
+    smart_input = st.chat_input("Ask anything: data, research, finance, policy, statistics, writing...", key="smart_assistant_chat_input")
+    smart_question = smart_input or selected_smart_prompt
+    if smart_question:
+        st.session_state.smart_chat_history.append({"role": "user", "content": smart_question})
+        try:
+            dataset_context = build_dataset_context(df, st.session_state.source or "Active dataset") if provider != "Dataset tools (no AI server)" else ""
+            result = ask_smart_assistant(
+                smart_question,
+                history=st.session_state.smart_chat_history[:-1],
+                dataset_context=dataset_context,
+                provider=provider,
+                df=df,
+                context=st.session_state.smart_chat_context,
+            )
+            st.session_state.smart_chat_context = result.get("context", st.session_state.smart_chat_context)
+            st.session_state.smart_chat_history.append({
+                "role": "assistant", "content": result["answer"],
+                "evidence": result.get("evidence"),
+                "provider": result.get("provider"),
+            })
+        except (RuntimeError, ValueError) as exc:
+            st.session_state.smart_chat_history.append({
+                "role": "assistant", "content": f"Assistant unavailable: {exc}",
+            })
+        st.rerun()
+
+    if st.button("Clear smart assistant conversation", key="clear_smart_assistant"):
+        st.session_state.smart_chat_history = []
+        st.session_state.smart_chat_context = None
+        st.rerun()
