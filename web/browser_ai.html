@@ -151,10 +151,25 @@ async function sendPrompt(value) {
     for await (const chunk of stream) { answer += chunk.choices?.[0]?.delta?.content || ""; output.textContent = answer || "Thinking…"; chat.scrollTop=chat.scrollHeight; }
     if (!answer.trim()) answer = "The model returned an empty response. Please try again.";
     output.textContent = answer; history.push({role:"assistant",content:answer});
-  } catch (error) { output.textContent = "Generation failed: " + (error?.message || String(error)); history.pop(); }
+  } catch (error) {
+    const detail = error?.message || String(error);
+    output.textContent = "Generation failed: " + detail;
+    history.pop();
+    // A disposed WebGPU/TVM resource means this engine must not be reused.
+    // Return the UI to a recoverable, unloaded state so the user can create
+    // a fresh engine instead of seeing a misleading Ready status.
+    if (/already been disposed|device lost|device was lost|device is lost/i.test(detail)) {
+      engine = null;
+      activeModel = null;
+      $("modelState").textContent = "Model unavailable · reload required";
+      status.textContent = "Model engine unavailable";
+      $("notice").textContent = "The browser inference engine became unavailable during generation. Click Load model to initialise a fresh engine. If the same error returns, refresh the page and try again; some GPU drivers may require restarting the browser. Your dataset and core analysis tools are unaffected.";
+    }
+  }
   finally {
     setBusy(false);
-    status.textContent = engine && activeModel ? "Ready · " + activeModel : "Model unavailable";
+    if (engine && activeModel) status.textContent = "Ready · " + activeModel;
+    else if (!status.textContent.includes("unavailable")) status.textContent = "Model unavailable";
     if (engine && activeModel) $("prompt").focus();
   }
 }
