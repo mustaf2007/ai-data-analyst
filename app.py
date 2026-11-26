@@ -77,10 +77,18 @@ def excel_analysis_bytes(dataframe, profile, numeric, cleaning_report=None,
                  for key, value in model_result.get("metrics", {}).items()]
             ).to_excel(writer, index=False, sheet_name="Model metrics")
         if financial_analysis is not None:
-            pd.DataFrame(
-                [{"metric": key.replace("_", " ").title(), "value": value}
-                 for key, value in financial_analysis.get("metrics", {}).items()]
-            ).to_excel(writer, index=False, sheet_name="Financial metrics")
+            financial_rows = [
+                {"metric": key.replace("_", " ").title(), "value": value}
+                for key, value in financial_analysis.get("metrics", {}).items()
+            ]
+            if not financial_rows:
+                financial_rows = [
+                    {"metric": "Status", "value": "Not calculated"},
+                    {"metric": "Reason", "value": financial_analysis.get("reason", "Required financial fields were not available.")},
+                ]
+            pd.DataFrame(financial_rows).to_excel(
+                writer, index=False, sheet_name="Financial metrics"
+            )
             holdings = financial_analysis.get("holdings")
             if holdings is not None and not holdings.empty:
                 holdings.to_excel(writer, index=False, sheet_name="Holdings attribution")
@@ -1599,6 +1607,14 @@ with tabs[4]:
                     ]
                     if "financial" in technical_type.lower() or "investment" in technical_type.lower():
                         report_sections.append("Financial performance attribution")
+                    is_financial_report = (
+                        "financial" in technical_type.lower()
+                        or "investment" in technical_type.lower()
+                    )
+                    financial_analysis = (
+                        narrative.get("financial_analysis")
+                        if is_financial_report else None
+                    )
                     narrative_pdf = build_pdf_report(
                         st.session_state.source, df, p, numeric_summary(df),
                         report_findings,
@@ -1607,11 +1623,11 @@ with tabs[4]:
                         executive_summary=narrative["executive_summary"],
                         methodology=narrative["methodology"],
                         sections=report_sections,
-                        financial_analysis=narrative.get("financial_analysis"),
+                        financial_analysis=financial_analysis,
                     )
                     narrative_excel = excel_analysis_bytes(
                         df, p, numeric_summary(df),
-                        financial_analysis=narrative.get("financial_analysis"),
+                        financial_analysis=financial_analysis,
                     )
                     st.session_state.narrative_report_artifacts = {
                         "markdown": narrative["markdown"], "pdf": narrative_pdf,
