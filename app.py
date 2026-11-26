@@ -1702,18 +1702,16 @@ with tabs[5]:
         st.subheader("Smart AI Assistant")
         st.caption("Ask general questions, explore your dataset, interpret analytical results, and draft technical reports.")
         provider = st.selectbox(
-            "Assistant engine",
-            ["Dataset tools (no AI server)", "Ollama (local model)", "OpenAI-compatible API (opt-in)"],
-            help="Ollama is the default no-API-key AI engine and runs an open-source model on a machine/server you control. Dataset tools are the offline fallback. The optional API provider is not required.",
-            index=["Dataset tools (no AI server)", "Ollama (local model)", "OpenAI-compatible API (opt-in)"].index(default_assistant_provider()),
+            "AI model",
+            ["Ollama (local model)", "OpenAI-compatible API (opt-in)"],
+            help="The Smart AI Assistant is a general-purpose chatbot. Ollama supports open-ended questions without an API key when connected to a running model. The optional API provider requires its own credentials and may have usage charges or limits.",
+            index=["Ollama (local model)", "OpenAI-compatible API (opt-in)"].index(default_assistant_provider()),
             key="smart_assistant_provider",
         )
         if provider == "Ollama (local model)":
-            st.info("No API key is required. Install Ollama and download a model (for example, `ollama pull llama3.1:8b`). When running the app on the same computer, the default address is `http://localhost:11434`. For Streamlit Cloud, localhost is the cloud container: point OLLAMA_BASE_URL to an Ollama server reachable over the internet. This is a server URL, not an API key.")
-        elif provider == "OpenAI-compatible API (opt-in)":
-            st.warning("External processing is enabled only when you choose this option. The assistant sends your question, recent chat context, dataset column names and aggregate summaries—not raw dataset rows. Configure OPENAI_API_KEY and optional OPENAI_BASE_URL / OPENAI_MODEL as deployment secrets.")
+            st.info("General-purpose AI chat with no API key. Install Ollama and download a model (for example, `ollama pull llama3.1:8b`). On the same computer, the default address is `http://localhost:11434`. On Streamlit Cloud, configure OLLAMA_BASE_URL to a secure, reachable Ollama server and OLLAMA_MODEL to an installed model. The URL is not an API key. Availability and usage depend on your model server.")
         else:
-            st.info("Dataset tools are the offline fallback and do not use a generative model. For general AI conversations without an API key, select Ollama and connect it to a local or self-hosted Ollama server. A cloud deployment needs a reachable OLLAMA_BASE_URL; no API key is needed.")
+            st.warning("This optional provider sends your question, recent chat context, and—when available—dataset column names and aggregate summaries, not raw dataset rows. Configure OPENAI_API_KEY and optional OPENAI_BASE_URL / OPENAI_MODEL as deployment secrets. Provider usage limits and charges may apply.")
 
         smart_prompts = [
             "Explain the most important patterns in this dataset.",
