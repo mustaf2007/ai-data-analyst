@@ -35,3 +35,11 @@ def test_browser_ai_disables_stale_model_after_load_failure_and_explains_fallbac
     assert "Model not loaded" in html
     assert "Dataset tools (no AI server)" in html
     assert "loadButton.disabled = value || !supported" in html
+
+
+def test_browser_ai_invalidates_disposed_engine_after_generation_failure():
+    html = build_browser_ai_html("", "Light")
+    assert "already been disposed|device lost|device was lost|device is lost" in html
+    assert 'engine = null;' in html
+    assert 'Model unavailable · reload required' in html
+    assert 'Click Load model to initialise a fresh engine.' in html
