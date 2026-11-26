@@ -77,7 +77,7 @@ const PALETTE = __PALETTE__;
 for (const [key,value] of Object.entries(PALETTE)) document.documentElement.style.setProperty("--"+key,value);
 const $ = (id) => document.getElementById(id);
 const chat = $("chat"), status = $("status"), loadButton = $("load"), sendButton = $("send");
-let engine = null, busy = false, history = [];
+let engine = null, activeModel = null, busy = false, history = [];
 const systemPrompt = "You are a capable, professional general-purpose AI assistant. Help with research, economics, public policy, statistics, data analysis, programming, education, writing and planning. Be accurate, structured and transparent about uncertainty. Do not invent sources or dataset values. Distinguish facts, assumptions and recommendations." + (DATASET_CONTEXT ? "\n\nACTIVE DATASET CONTEXT (schema and aggregate summaries only; no raw records):\n" + DATASET_CONTEXT : "");
 function addMessage(role, content) {
   const empty = chat.querySelector(".empty"); if (empty) empty.remove();
@@ -86,14 +86,22 @@ function addMessage(role, content) {
   const body = document.createElement("div"); body.className = "body"; body.textContent = content;
   node.append(who, body); chat.append(node); chat.scrollTop = chat.scrollHeight; return body;
 }
-function setBusy(value) { busy = value; sendButton.disabled = value || !engine; $("prompt").disabled = value || !engine; loadButton.disabled = value; }
+function setBusy(value) {
+  busy = value;
+  const ready = Boolean(engine && activeModel);
+  sendButton.disabled = value || !ready;
+  $("prompt").disabled = value || !ready;
+  $("clear").disabled = value;
+  $("model").disabled = value;
+  loadButton.disabled = value || !supported;
+}
 function setProgress(text, progress) {
   $("progressWrap").style.display = "block"; $("progressLabel").textContent = text || "Loading model…";
   if (Number.isFinite(progress)) $("progressFill").style.width = Math.max(0,Math.min(100,progress*100)) + "%";
 }
 async function checkSupport() {
   if (!window.isSecureContext) { status.textContent = "Secure browser connection required"; $("notice").textContent = "WebGPU requires a secure HTTPS browser context. Open the application over HTTPS."; loadButton.disabled = true; return false; }
-  if (!navigator.gpu) { status.textContent = "WebGPU not available"; $("notice").textContent = "This browser or embedded frame does not expose WebGPU. Try the latest Chrome or Edge on a computer with WebGPU enabled."; loadButton.disabled = true; return false; }
+  if (!navigator.gpu) { status.textContent = "WebGPU not available"; $("notice").textContent = "This browser or embedded frame does not expose WebGPU. Browser AI needs a WebGPU-capable browser and device. You can still use the Smart AI Assistant's Dataset tools (no AI server) option for supported dataset questions without an API key."; loadButton.disabled = true; return false; }
   try { const adapter = await navigator.gpu.requestAdapter(); if (!adapter) throw new Error("No compatible graphics adapter was found."); status.textContent = "WebGPU ready"; return true; }
   catch (error) { status.textContent = "WebGPU unavailable"; $("notice").textContent = error.message + " Try a recent Chrome/Edge browser and update graphics drivers."; loadButton.disabled = true; return false; }
 }
@@ -106,15 +114,24 @@ loadButton.addEventListener("click", async () => {
     const progress = (report) => setProgress(report.text || "Loading model…", report.progress);
     if (!engine) engine = await webllm.CreateMLCEngine(model,{initProgressCallback:progress});
     else await engine.reload(model);
+    activeModel = model;
     $("progressWrap").style.display = "none"; $("modelState").textContent = "Ready · " + model;
     status.textContent = "Model ready on this device";
     $("notice").textContent = "Model ready. Prompts and included dataset summaries are processed in this browser. Model files are cached where browser storage permits; first download may take several minutes.";
     $("prompt").disabled = false; sendButton.disabled = false; addMessage("assistant","I'm ready. Ask a question to begin.");
   } catch (error) {
+    // A failed first load or model switch must never leave a stale engine usable
+    // under the newly selected model label.
+    engine = null;
+    activeModel = null;
     status.textContent = "Model could not be loaded";
+    $("modelState").textContent = "Model not loaded";
     setProgress("Load failed: " + (error?.message || String(error)),0);
-    $("notice").textContent = "The model could not be loaded. Check your connection, available memory and WebGPU support, then try the lighter model. Details: " + (error?.message || String(error));
-  } finally { setBusy(false); if (engine) { $("prompt").disabled=false; sendButton.disabled=false; } }
+    $("notice").textContent = "The model could not be loaded. Check your connection, available memory and WebGPU support, then try the lighter model. If WebGPU is unavailable, use Dataset tools (no AI server) in the Smart AI Assistant for supported data questions. Details: " + (error?.message || String(error));
+  } finally {
+    setBusy(false);
+    if (engine && activeModel) status.textContent = "Ready · " + activeModel;
+  }
 });
 async function sendPrompt(value) {
   const question = String(value || "").trim(); if (!question || !engine || busy) return;
@@ -128,11 +145,15 @@ async function sendPrompt(value) {
     if (!answer.trim()) answer = "The model returned an empty response. Please try again.";
     output.textContent = answer; history.push({role:"assistant",content:answer});
   } catch (error) { output.textContent = "Generation failed: " + (error?.message || String(error)); history.pop(); }
-  finally { setBusy(false); status.textContent = "Model ready · local inference"; $("prompt").focus(); }
+  finally {
+    setBusy(false);
+    status.textContent = engine && activeModel ? "Ready · " + activeModel : "Model unavailable";
+    if (engine && activeModel) $("prompt").focus();
+  }
 }
 $("form").addEventListener("submit",(event)=>{event.preventDefault();sendPrompt($("prompt").value);});
 $("prompt").addEventListener("keydown",(event)=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();$("form").requestSubmit();}});
-$("clear").addEventListener("click",()=>{history=[];chat.innerHTML='<div class="empty"><strong>Conversation cleared</strong><br>Ask a new question whenever you are ready.</div>';});
+$("clear").addEventListener("click",()=>{if(busy)return;history=[];chat.innerHTML='<div class="empty"><strong>Conversation cleared</strong><br>Ask a new question whenever you are ready.</div>';});
 document.querySelectorAll("[data-prompt]").forEach(button=>button.addEventListener("click",()=>{if(!engine){status.textContent="Load a model before sending a question.";return;}sendPrompt(button.dataset.prompt);}));
 </script>
 </body>
