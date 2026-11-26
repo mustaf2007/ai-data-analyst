@@ -1,6 +1,6 @@
 # AI Data Analyst — Universal Data Intelligence
 
-A local-first analytics workspace for CSV and Excel datasets. Prepare data, explore patterns, test relationships, build baseline models, and produce evidence-based reports from one streamlined interface.
+A session-based analytics workspace for CSV and Excel datasets. Prepare data, explore patterns, test relationships, build baseline models, and produce evidence-based reports from one streamlined interface.
 
 **Core analysis, public open-data connections and the browser-based AI assistant do not require an API key.** The Smart AI Assistant can run open-source Qwen models directly in the visitor’s browser using WebLLM and WebGPU. Optional hosted providers and Ollama remain available as alternatives.
 
@@ -75,7 +75,7 @@ GitHub Actions runs the test suite and compile check on Python 3.11 and 3.12.
 
 ## Data handling and limitations
 
-- The app does not intentionally persist uploaded datasets in a database. Data is held in Streamlit session state and process memory while the session is active.
+- The app does not intentionally persist uploaded datasets in a database. Data is held in Streamlit session state and process memory while the session is active. In a hosted deployment, file parsing and analysis run on the application host/container, not necessarily on the visitor's device.
 - Browser AI performs inference on the user’s device; prompts and included dataset summaries are not sent to an inference API. The browser must download the WebLLM runtime and model weights from public CDNs/model hosting on first use, and WebGPU-capable hardware/browser support is required. The optional hosted AI modes send the question, recent conversation and compact schema/aggregate summaries to the configured provider; raw record rows are not included in that context. Do not use hosted modes with confidential data unless your governance rules permit the transfer.
 - Do not upload personal, confidential, regulated or commercially sensitive information to a public demo.
 - Upload limits are application safeguards, not guarantees that every permitted file will fit the hosting platform's memory or execution limits.
