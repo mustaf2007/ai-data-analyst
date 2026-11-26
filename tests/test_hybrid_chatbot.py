@@ -63,7 +63,7 @@ def test_hybrid_uses_structured_plan_and_keeps_calculation_in_pandas(monkeypatch
     df = pd.DataFrame({"sales": [10, 20, 30]})
     monkeypatch.setattr(
         chatbot, "_provider_plan",
-        lambda question, data, provider, keys: (
+        lambda question, data, provider, keys, history=None: (
             {"operation": "aggregate", "column": "sales", "statistic": "median"},
             "Mock provider",
         ),
@@ -77,3 +77,39 @@ def test_hybrid_uses_structured_plan_and_keeps_calculation_in_pandas(monkeypatch
 def test_hybrid_requires_a_non_empty_dataset():
     with pytest.raises(ValueError, match="non-empty dataset"):
         chatbot.answer_hybrid_question("summarise", pd.DataFrame())
+
+
+
+def test_provider_plan_sends_schema_metadata_not_raw_rows(monkeypatch):
+    sent = {}
+
+    def fake_completion(base_url, model, messages, key):
+        sent["messages"] = messages
+        return '{"operation":"aggregate","column":"amount","statistic":"sum"}'
+
+    monkeypatch.setattr(chatbot, "_chat_completion", fake_completion)
+    df = pd.DataFrame({"amount": [101, 202], "customer_note": ["private-row-a", "private-row-b"]})
+    plan, provider = chatbot._provider_plan(
+        "total amount", df, "Free hosted AI (automatic fallback)",
+        {"Groq": "test-key"},
+    )
+    payload = "\n".join(item["content"] for item in sent["messages"])
+    assert plan["operation"] == "aggregate"
+    assert "private-row-a" not in payload and "private-row-b" not in payload
+    assert "customer_note" in payload
+    assert provider.startswith("Groq")
+
+
+def test_hybrid_planner_receives_recent_conversation_history(monkeypatch):
+    df = pd.DataFrame({"sales": [10, 20]})
+    seen = {}
+
+    def fake_plan(question, data, provider, keys, history=None):
+        seen["history"] = history
+        return {"operation": "aggregate", "column": "sales", "statistic": "mean"}, "Mock provider"
+
+    monkeypatch.setattr(chatbot, "_provider_plan", fake_plan)
+    chatbot.answer_hybrid_question(
+        "What about the average?", df, history=[{"role": "user", "content": "Tell me about sales"}],
+    )
+    assert seen["history"][0]["content"] == "Tell me about sales"
