@@ -64,10 +64,14 @@ def test_research_report_applies_selected_alpha_to_interpretation_and_priority(m
 
     assert strict["test"]["significant_at_alpha"] is False
     assert "Insufficient evidence" in strict["test"]["interpretation"]
-    assert strict["recommendations"].iloc[0]["Priority"] == "Medium"
+    test_recommendation = lambda report: next(
+        row["Priority"] for _, row in report["recommendations"].iterrows()
+        if "Welch" in row["Evidence"]
+    )
+    assert test_recommendation(strict) == "Medium"
     assert lenient["test"]["significant_at_alpha"] is True
     assert "Evidence of a difference" in lenient["test"]["interpretation"]
-    assert lenient["recommendations"].iloc[0]["Priority"] == "High"
+    assert test_recommendation(lenient) == "High"
 
 
 def test_research_report_selects_two_distinct_numeric_variables_for_correlation():
