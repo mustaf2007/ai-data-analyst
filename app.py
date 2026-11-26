@@ -128,7 +128,8 @@ def initialise_state():
         "anomaly_config": None,
         "cleaning_report": None,
         "chart_exports": {},
-        "report_artifacts": None,\n        "narrative_report_artifacts": None,
+        "report_artifacts": None,
+        "narrative_report_artifacts": None,
         "chat_history": [],
         "chat_context": None,
     }
