@@ -255,6 +255,28 @@ def grouped_summary(df, group_column, value_column, aggregation="mean"):
     if aggregation not in {"mean","median","sum","count","min","max"}: raise ValueError("Unsupported aggregation.")
     return df.groupby(group_column,dropna=False)[value_column].agg(aggregation).reset_index().sort_values(value_column,ascending=False)
 
+def build_trend_frame(df, time_column, value_column, parse_datetime=False):
+    """Build a validated, sorted two-column frame for a time-series chart."""
+    if df.columns.duplicated().any():
+        duplicates = df.columns[df.columns.duplicated()].astype(str).tolist()
+        raise DataInputError(
+            "Trend chart cannot run because column names are duplicated: "
+            + ", ".join(duplicates)
+        )
+    if time_column == value_column:
+        raise DataInputError("Choose a different numeric indicator from the time variable.")
+    if time_column not in df.columns or value_column not in df.columns:
+        raise DataInputError("The selected time or indicator column is no longer available.")
+    trend = pd.DataFrame({
+        time_column: df[time_column],
+        value_column: pd.to_numeric(df[value_column], errors="coerce"),
+    })
+    if parse_datetime:
+        trend[time_column] = pd.to_datetime(trend[time_column], errors="coerce")
+    trend = trend.dropna(subset=[time_column, value_column])
+    return trend.sort_values(time_column, kind="stable").reset_index(drop=True)
+
+
 def infer_datetime_columns(df, threshold=.8):
     result=[]
     for c in df.select_dtypes(include=["object","string"]):
