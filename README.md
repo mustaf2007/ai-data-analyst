@@ -1,22 +1,36 @@
 # AI Data Analyst — Universal Data Intelligence
 
-A local-first data analysis workspace built with Python, Streamlit and open-source libraries. Upload a CSV or XLSX file, inspect data quality, clean a working copy, explore distributions and relationships, train baseline predictive models, detect unusual observations, and export CSV/PDF outputs.
+A local-first analytics workspace for CSV and Excel datasets. Prepare data, explore patterns, test relationships, build baseline models, and produce evidence-based reports from one streamlined interface.
 
-**Local-first by default.** Core data analysis uses deterministic Python/statistical/ML processing with no API key. The Smart AI Assistant can optionally connect to a locally hosted Ollama model or an explicitly configured OpenAI-compatible API for general-purpose questions and report drafting.
+**Core analysis does not require an AI API key.** Data processing, statistical analysis, charts, and report generation run with Python libraries. The optional Smart AI Assistant can use a local or self-hosted Ollama model; an OpenAI-compatible API is an explicitly optional alternative.
 
-## Current capabilities
+## Workspace guide
 
-- **Upload & preview:** CSV and XLSX, file-size and dataset-shape safeguards, duplicate column-name normalization.
-- **Overview:** dataset dimensions, missingness, duplicate-row count, heuristic quality score, automated observations and data preview.
-- **Data quality & readiness:** column-level data types, non-null counts, missingness, unique counts and sample values, plus analysis-specific readiness checks for exploratory analysis, correlation, regression, classification and time-series workflows. Column diagnostics classify missingness severity and flag suspicious headers and numeric-looking text columns.
-- **Cleaning:** remove duplicate rows; drop entirely empty columns; drop rows with missing values; impute numeric values with median, mean or zero; impute categorical values with mode; or use the combined recommended option (numeric median plus categorical mode). After applying changes, the app displays an automatic before/after report with row counts, duplicates removed, missing cells filled/remaining, a per-column missingness table, and heuristic quality-score change. The per-column report can be downloaded as CSV, and the cleaned active dataset is available as `cleaned_dataset.csv`. The download is shown directly in the Clean data tab after cleaning, and the current dataset remains downloadable even before cleaning. The original upload remains available for reset.
-- **Exploration:** numeric descriptive statistics, categorical frequency tables, histograms, box plots, grouped aggregations and date trends with selectable aggregation.
-- **Relationships:** Pearson, Spearman and Kendall correlation matrices plus strongest pairwise associations.
-- **Predictive modeling:** local Random Forest regression/classification baseline with hold-out metrics and actual-vs-predicted comparison.
-- **Anomaly detection:** local Isolation Forest with configurable expected anomaly share.
-- **Exports:** active dataset CSV, Excel workbooks, PDF analysis reports and downloadable charts.\n- **Smart AI Assistant:** conversational general-purpose Q&A through Ollama or an opt-in OpenAI-compatible endpoint; dataset-only deterministic mode remains available without a model.\n- **Professional technical reports:** configurable report title, report type, author and purpose; executive summary, data quality, quantified findings, descriptive tables, correlations, recommendations, methodology and limitations; Markdown, PDF and Excel exports.
-- **Research report builder:** enter a research question and objectives to generate a question-guided report from the active dataset. Includes data-quality screening, descriptive summaries, category frequencies, Pearson correlations, cautious automatic test selection (Welch t-test, one-way ANOVA or chi-square where the data structure supports it), effect sizes, p-values, assumptions and limitations, prioritised evidence-linked recommendations, and automatically generated Plotly charts. Downloads include a formatted PDF with chart images where static rendering is available, a Markdown report, and a multi-sheet Excel evidence workbook with source data, findings, statistical results, methodology, recommendations and chart-ready data. This workflow is local and does not require an AI API key. Financial/investment reports additionally detect common portfolio fields and calculate total-portfolio and invested-sleeve returns separately, summarize holdings, and report fees without deducting them twice. Metrics are omitted when required fields are unavailable or ambiguous.\n- **Privacy controls:** model context uses dataset schema and aggregate summaries, not raw record rows. External API use is opt-in and clearly identified in the interface.
-- **Engineering:** pytest suite, GitHub Actions CI, dependency files, Streamlit configuration and security notes.
+The interface is organised into six workspaces:
+
+| Workspace | Main tools |
+|---|---|
+| **Overview** | Dataset health, key findings, trend and distribution snapshots |
+| **Prepare** | Data-quality checks, analysis readiness, cleaning and cleaning audit |
+| **Analyze** | Descriptive exploration, correlations, Chart Studio, time series, statistical tests, geographic summaries, dataset comparison and automated insights |
+| **Models** | Baseline Random Forest regression/classification and Isolation Forest anomaly screening |
+| **Reports** | Research Report Builder plus configurable PDF and Excel exports |
+| **Assistant** | Deterministic Ask the Data and optional generative Smart AI Assistant |
+
+Related tools are grouped into secondary tabs. The overlapping standalone narrative-report screen has been removed; report creation is consolidated under **Reports**.
+
+## Main capabilities
+
+- **Safe data intake:** CSV/XLSX upload, duplicate-header normalization, and safeguards of 20 MB, 250,000 rows and 150 columns.
+- **Data quality and cleaning:** missingness and duplicate checks, column diagnostics, analysis-readiness checklists, controlled cleaning options, before/after audit and cleaned-data export. The original upload remains available for reset.
+- **Exploration and visualisation:** descriptive statistics, category frequencies, histograms, box plots, grouped summaries, date trends, correlation matrices and custom charts with HTML/PNG/SVG export where supported.
+- **Statistical analysis:** one-sample and Welch t-tests, one-way ANOVA, chi-square tests, effect sizes, confidence intervals and assumption/sparse-count warnings where applicable.
+- **Time-series and geographic analysis:** period aggregation and baseline forecasts, plus geographic summaries when usable geographic fields are present.
+- **Dataset comparison:** compare a second uploaded dataset with the active dataset, including schema and indicator/distribution differences.
+- **Baseline modelling:** local Random Forest regression/classification and Isolation Forest screening. These are exploratory baselines, not production model governance.
+- **Research Report Builder:** enter a research question and objectives to produce descriptive evidence, question-guided statistical screening, effect sizes, automatically generated charts, methodology, limitations and prioritised recommendations. Download a formatted PDF, Markdown report and multi-sheet Excel evidence workbook with source data and chart-ready tables. The workflow uses local calculations and does not require an AI API key.
+- **Financial report support:** when explicit, unambiguous portfolio fields are present, financial reporting can distinguish total-portfolio and invested-sleeve performance and report fees without deducting them twice.
+- **Assistant options:** Ask the Data provides deterministic answers from supported dataset calculations. Smart AI Assistant supports Ollama (no API key; local/self-hosted model required), an offline dataset-tools fallback, and an optional OpenAI-compatible endpoint.
 
 ## Quick start
 
@@ -33,38 +47,41 @@ pip install -r requirements-dev.txt
 streamlit run app.py
 ```
 
-Open the local URL printed by Streamlit. Select **Load built-in sample** to try the application without supplying a file.
+Open the local URL printed by Streamlit. Choose **Load built-in sample** from the sidebar to explore the app without uploading a file.
 
-## Tests and checks
+## Optional generative AI setup
+
+The analytical features and report builder work without an API key. To use generative responses with Ollama:
+
+```bash
+ollama pull llama3.1:8b
+```
+
+Run Ollama on the same computer as the local Streamlit app; the default endpoint is `http://localhost:11434`. For a hosted Streamlit deployment, `localhost` refers to the cloud container, not your computer. Configure `OLLAMA_BASE_URL` to a reachable Ollama server and optionally set `OLLAMA_MODEL`. This is a server URL, not an API key; hosting a reachable model may have infrastructure costs. An OpenAI-compatible API is optional and requires provider credentials.
+
+## Tests
 
 ```bash
 pytest
 python -m compileall -q app.py src tests
 ```
 
-The GitHub Actions workflow runs the test suite and compile check on Python 3.11 and 3.12 for pushes and pull requests to `main`.
-
-## Deploy to Streamlit Community Cloud
-
-1. Push this repository to GitHub.
-2. Sign in to Streamlit Community Cloud with GitHub.
-3. Create an app and select this repository, branch `main`, and entrypoint `app.py`.
-4. Select Python 3.12 in advanced settings.
-5. Deploy. No secrets or API keys are required for the core application. For general-purpose AI answers, optionally add `OPENAI_API_KEY` and `OPENAI_MODEL` under Advanced settings → Secrets. You may also set `OPENAI_BASE_URL` for a compatible endpoint. Alternatively, configure `OLLAMA_BASE_URL` and `OLLAMA_MODEL` to reach a separately hosted Ollama server.
-
-Community Cloud is suitable for a public demo and lightweight use. It is not a substitute for a secured private deployment for confidential client datasets. Resource limits and platform policies may change; test realistic file sizes and workloads before client use.
+GitHub Actions runs the test suite and compile check on Python 3.11 and 3.12.
 
 ## Data handling and limitations
 
-- The app has no database and does not intentionally persist uploaded datasets. The optional external AI mode transmits the user question, recent conversation and compact dataset schema/aggregate summaries to the configured provider; raw record rows are not included in that context. Do not enable external AI for confidential datasets unless permitted by your data-governance rules. Data is held in Streamlit session state and in process memory while the session is active. Hosting providers may still process application traffic and runtime data; consult the host's current privacy terms.
-- Do not upload personal, confidential, regulated or commercially sensitive data to a public demo.
-- The 20 MB, 250,000-row and 150-column limits are application safeguards, not guarantees of successful processing under every hosting resource limit.
-- The overview quality score is a **heuristic**: 70% completeness and 30% row uniqueness. The analysis-readiness percentage is the share of checks passed for the selected workflow; it is not a certification or a guarantee of suitability. Review warnings and apply domain-specific validation.
-- Correlation does not imply causation.
-- Predictive modeling is a baseline workflow. The random hold-out split is not appropriate for every time-series, panel, grouped or leakage-prone dataset. It does not perform automated feature leakage detection, temporal validation, hyperparameter optimization or model governance.
-- Anomaly detection identifies unusual patterns, not confirmed errors, fraud or misconduct.
-- The legacy general-purpose PDF export contains summary tables and observations; the dedicated research report builder embeds chart images when the configured Plotly/Kaleido renderer is available and always includes chart data in Excel.
-- Excel support is `.xlsx`; legacy `.xls` is not supported.
+- The app does not intentionally persist uploaded datasets in a database. Data is held in Streamlit session state and process memory while the session is active.
+- The optional external AI mode sends the user's question, recent conversation and compact schema/aggregate summaries to the configured provider; raw record rows are not included in that context. Do not use it with confidential data unless your governance rules permit the transfer.
+- Do not upload personal, confidential, regulated or commercially sensitive information to a public demo.
+- Upload limits are application safeguards, not guarantees that every permitted file will fit the hosting platform's memory or execution limits.
+- The dataset quality score is a heuristic, not a certification. Analysis-readiness scores are workflow-specific checklists, not guarantees of statistical suitability.
+- Research report variable selection uses question/column-name matching and data structure. Review the selected variables and statistical method before relying on the report. Sampling design, assumptions, representativeness, measurement validity and confounding are not fully verified automatically.
+- Correlation does not imply causation. Statistical significance is not proof of practical importance or causal effect.
+- Predictive modelling uses baseline hold-out evaluation; it does not automatically address temporal validation, leakage, hyperparameter optimisation or model governance.
+- Anomaly flags identify unusual patterns, not confirmed errors, fraud or misconduct.
+- PDF chart images depend on static Plotly rendering being available; chart data is included in the Excel evidence workbook.
+- Excel export uses `.xlsx`; legacy `.xls` is not supported.
+- The public demo is not a multi-tenant enterprise service. Authentication, authorisation, tenant isolation, audit logging and durable retention controls are not included.
 
 ## Repository layout
 
@@ -72,24 +89,19 @@ Community Cloud is suitable for a public demo and lightweight use. It is not a s
 app.py
 src/
   analytics.py
+  assistant.py
+  financial_reporting.py
   modeling.py
   reporting.py
+  research_reporting.py
+  smart_assistant.py
 tests/
-  test_analytics.py
-  test_modeling.py
-  test_reporting.py
-  test_research_reporting.py
+docs/
 sample_data/
-  sample_business_data.csv
-.streamlit/config.toml
-.github/workflows/ci.yml
+.streamlit/
+.github/workflows/
 requirements.txt
 requirements-dev.txt
-pytest.ini
-README.md
-SECURITY.md
-CONTRIBUTING.md
-CHANGELOG.md
 ```
 
 ## License
