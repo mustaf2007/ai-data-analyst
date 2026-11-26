@@ -1481,16 +1481,16 @@ with tabs[18]:
     provider = st.selectbox(
         "Assistant engine",
         ["Dataset tools (no AI server)", "Ollama (local model)", "OpenAI-compatible API (opt-in)"],
-        help="Dataset tools are free and deterministic. Ollama runs a model on your own machine/server. API mode sends your question and compact dataset summaries to the configured provider.",
+        help="Ollama is the default no-API-key AI engine and runs an open-source model on a machine/server you control. Dataset tools are the offline fallback. The optional API provider is not required.",
         index=["Dataset tools (no AI server)", "Ollama (local model)", "OpenAI-compatible API (opt-in)"].index(default_assistant_provider()),
         key="smart_assistant_provider",
     )
     if provider == "Ollama (local model)":
-        st.info("Requires Ollama running at OLLAMA_BASE_URL (default http://localhost:11434) and a model set in OLLAMA_MODEL (default llama3.1:8b). On Streamlit Cloud, localhost refers to the cloud container, not your personal computer.")
+        st.info("No API key is required. Install Ollama and download a model (for example, `ollama pull llama3.1:8b`). When running the app on the same computer, the default address is `http://localhost:11434`. For Streamlit Cloud, localhost is the cloud container: point OLLAMA_BASE_URL to an Ollama server reachable over the internet. This is a server URL, not an API key.")
     elif provider == "OpenAI-compatible API (opt-in)":
         st.warning("External processing is enabled only when you choose this option. The assistant sends your question, recent chat context, dataset column names and aggregate summaries—not raw dataset rows. Configure OPENAI_API_KEY and optional OPENAI_BASE_URL / OPENAI_MODEL as deployment secrets.")
     else:
-        st.info("You are currently using deterministic dataset tools, not a generative AI model. To enable general conversation and advanced report drafting on Streamlit Cloud, add OPENAI_API_KEY to the app's Secrets, then reload. Example secret: OPENAI_API_KEY = \"your-api-key\". You can also configure OPENAI_MODEL and OPENAI_BASE_URL. No key is included in the repository.")
+        st.info("Dataset tools are the offline fallback and do not use a generative model. For general AI conversations without an API key, select Ollama and connect it to a local or self-hosted Ollama server. A cloud deployment needs a reachable OLLAMA_BASE_URL; no API key is needed.")
 
     smart_prompts = [
         "Explain the most important patterns in this dataset.",
