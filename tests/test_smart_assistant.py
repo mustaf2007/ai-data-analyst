@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from smart_assistant import build_dataset_context, ask_smart_assistant
+from smart_assistant import build_dataset_context, ask_smart_assistant, default_assistant_provider
 
 
 def test_dataset_context_contains_schema_and_aggregates_not_rows():
@@ -23,3 +23,19 @@ def test_api_provider_requires_secret(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
         ask_smart_assistant("Explain regression", provider="OpenAI-compatible API (opt-in)")
+
+
+def test_dataset_context_includes_grouped_aggregates():
+    df = pd.DataFrame({
+        "sales": [10, 20, 30, 40],
+        "region": ["North", "North", "South", "South"],
+    })
+    context = build_dataset_context(df)
+    assert "Grouped numeric summaries by region" in context
+    assert "North" in context and "South" in context
+
+
+def test_default_provider_prefers_configured_api(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+    assert default_assistant_provider() == "OpenAI-compatible API (opt-in)"
