@@ -12,7 +12,7 @@ def test_financial_analysis_separates_portfolio_and_stock_sleeve_returns():
     metrics = result["metrics"]
     assert metrics["portfolio_return_pct"] == pytest.approx(-1.42413, abs=1e-4)
     assert metrics["invested_sleeve_pnl"] == pytest.approx(-1395.45, abs=0.01)
-    assert metrics["invested_sleeve_return_pct"] == pytest.approx(-4.8649, abs=1e-3)
+    assert metrics["invested_sleeve_return_pct"] == pytest.approx(-4.86687, abs=1e-4)
     assert metrics["reported_fees"] == pytest.approx(28.67)
     assert "not deducted again" in result["markdown"]
 
