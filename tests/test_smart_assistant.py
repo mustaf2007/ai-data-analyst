@@ -43,7 +43,7 @@ def test_default_provider_does_not_require_api_key(monkeypatch):
 
 
 def test_default_provider_uses_browser_open_model():
-    assert default_assistant_provider() == "Free hosted AI (automatic fallback)"
+    assert default_assistant_provider() == "Browser AI (open-source · no API key)"
 
 
 def test_free_provider_requires_at_least_one_key(monkeypatch):
