@@ -49,7 +49,7 @@ def excel_bytes(dataframe):
 
 
 def excel_analysis_bytes(dataframe, profile, numeric, cleaning_report=None,
-                         anomalies=None, model_result=None):
+                         anomalies=None, model_result=None, financial_analysis=None):
     """Build a multi-sheet workbook containing the active data and analysis outputs."""
     output = io.BytesIO()
     overview_keys = ["rows", "columns", "missing_cells", "missing_pct",
@@ -76,6 +76,14 @@ def excel_analysis_bytes(dataframe, profile, numeric, cleaning_report=None,
                 [{"metric": key, "value": value}
                  for key, value in model_result.get("metrics", {}).items()]
             ).to_excel(writer, index=False, sheet_name="Model metrics")
+        if financial_analysis is not None:
+            pd.DataFrame(
+                [{"metric": key.replace("_", " ").title(), "value": value}
+                 for key, value in financial_analysis.get("metrics", {}).items()]
+            ).to_excel(writer, index=False, sheet_name="Financial metrics")
+            holdings = financial_analysis.get("holdings")
+            if holdings is not None and not holdings.empty:
+                holdings.to_excel(writer, index=False, sheet_name="Holdings attribution")
     return output.getvalue()
 
 
