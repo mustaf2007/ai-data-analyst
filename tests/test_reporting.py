@@ -42,3 +42,13 @@ def test_pdf_report_includes_optional_analysis_outputs():
     )
     assert pdf.startswith(b"%PDF")
     assert len(pdf) > 500
+
+
+
+def test_text_report_pdf_is_generated():
+    from reporting import build_text_report_pdf
+
+    pdf = build_text_report_pdf(
+        "# Executive summary\n\nThe portfolio returned -1.42%.\n\n## Recommendations\n- Review position sizing."
+    )
+    assert pdf.startswith(b"%PDF")
