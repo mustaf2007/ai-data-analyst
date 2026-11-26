@@ -32,6 +32,18 @@ def build_dataset_context(df: pd.DataFrame, source: str = "Active dataset") -> s
     return "\n".join(lines)
 
 
+def _setting(name: str, default: str = "") -> str:
+    """Read deployment environment variables or Streamlit secrets safely."""
+    value = os.getenv(name, "").strip()
+    if value:
+        return value
+    try:
+        import streamlit as st
+        return str(st.secrets.get(name, default)).strip()
+    except Exception:
+        return default
+
+
 def _post_json(url: str, payload: dict, headers: dict | None = None, timeout: int = 90) -> dict:
     data = json.dumps(payload).encode("utf-8")
     request = Request(url, data=data, headers={"Content-Type": "application/json", **(headers or {})}, method="POST")
@@ -95,8 +107,8 @@ def ask_smart_assistant(
     messages.append({"role": "user", "content": question})
 
     if provider == "Ollama (local model)":
-        base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
-        model = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+        base = _setting("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+        model = _setting("OLLAMA_MODEL", "llama3.1:8b")
         result = _post_json(
             base + "/api/chat",
             {"model": model, "messages": messages, "stream": False,
@@ -108,11 +120,11 @@ def ask_smart_assistant(
         return {"answer": answer, "provider": f"Ollama · {model}"}
 
     if provider == "OpenAI-compatible API (opt-in)":
-        key = os.getenv("OPENAI_API_KEY", "").strip()
+        key = _setting("OPENAI_API_KEY", "")
         if not key:
             raise RuntimeError("OPENAI_API_KEY is not configured. Add it as a deployment secret, or use the local provider.")
-        base = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        base = _setting("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+        model = _setting("OPENAI_MODEL", "gpt-4o-mini")
         result = _post_json(
             base + "/chat/completions",
             {"model": model, "messages": messages, "temperature": 0.2},
