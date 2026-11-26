@@ -42,7 +42,7 @@ def test_default_provider_does_not_require_api_key(monkeypatch):
 
 
 
-def test_default_provider_uses_free_hosted_fallback():
+def test_default_provider_uses_browser_open_model():
     assert default_assistant_provider() == "Free hosted AI (automatic fallback)"
 
 
