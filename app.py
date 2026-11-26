@@ -18,7 +18,7 @@ from analytics import (
 )
 from modeling import train_predictive_model, detect_anomalies
 from reporting import build_pdf_report
-from assistant import suggest_analyses, answer_dataset_question
+from assistant import suggest_analyses, answer_dataset_question\nfrom report_assistant import build_narrative_report
 
 st.set_page_config(page_title="AI Data Analyst", page_icon="📊", layout="wide")
 st.title("📊 AI Data Analyst")
@@ -127,7 +127,7 @@ def initialise_state():
         "anomaly_config": None,
         "cleaning_report": None,
         "chart_exports": {},
-        "report_artifacts": None,
+        "report_artifacts": None,\n        "narrative_report_artifacts": None,
         "chat_history": [],
         "chat_context": None,
     }
@@ -254,7 +254,7 @@ px.defaults.color_discrete_sequence = [accent_color, "#20a486", "#e09f3e", "#8b7
 tabs = st.tabs([
     "Dashboard", "Data quality", "Clean data", "Explore", "Relationships",
     "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights", "Data story", "Time-series intelligence", "Dataset comparison", "Geographic intelligence", "Statistical testing",
-    "Analysis suggestions", "Ask the data",
+    "Analysis suggestions", "Ask the data", "AI narrative report",
 ])
 
 with tabs[0]:
@@ -1361,3 +1361,56 @@ with tabs[16]:
         st.session_state.chat_history = []
         st.session_state.chat_context = None
         st.rerun()
+
+
+with tabs[17]:
+    st.subheader("AI-generated analytical report")
+    st.caption(
+        "Generate an evidence-led narrative from the active dataset. Findings are calculated "
+        "locally; the report does not invent statistical significance, causality or forecasts."
+    )
+    if st.button("Generate narrative report", type="primary", key="generate_narrative_report"):
+        try:
+            narrative = build_narrative_report(df, st.session_state.source or "Active dataset")
+            narrative_pdf = build_pdf_report(
+                st.session_state.source, df, p, numeric_summary(df),
+                narrative["findings"],
+                report_title=narrative["title"],
+                executive_summary=narrative["executive_summary"],
+                methodology=narrative["methodology"],
+                sections=[
+                    "Dataset overview", "Key findings", "Numeric summary",
+                    "Correlation matrix",
+                ],
+            )
+            narrative_excel = excel_analysis_bytes(df, p, numeric_summary(df))
+            st.session_state.narrative_report_artifacts = {
+                "markdown": narrative["markdown"], "pdf": narrative_pdf,
+                "xlsx": narrative_excel, "title": narrative["title"],
+            }
+        except (ValueError, TypeError, KeyError) as exc:
+            st.error(f"Narrative report could not be generated: {exc}")
+
+    narrative_artifacts = st.session_state.get("narrative_report_artifacts")
+    if narrative_artifacts:
+        st.markdown(narrative_artifacts["markdown"])
+        safe_report_name = "data_analysis_report"
+        export_cols = st.columns(3)
+        export_cols[0].download_button(
+            "Download Markdown report", narrative_artifacts["markdown"],
+            f"{safe_report_name}.md", "text/markdown",
+            key="download_narrative_markdown", use_container_width=True,
+        )
+        export_cols[1].download_button(
+            "Download PDF report", narrative_artifacts["pdf"],
+            f"{safe_report_name}.pdf", "application/pdf",
+            key="download_narrative_pdf", use_container_width=True,
+        )
+        export_cols[2].download_button(
+            "Download Excel workbook", narrative_artifacts["xlsx"],
+            f"{safe_report_name}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_narrative_excel", use_container_width=True,
+        )
+    else:
+        st.info("Generate the report to preview its findings and export Markdown, PDF and Excel files.")
