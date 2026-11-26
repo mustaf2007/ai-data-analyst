@@ -143,9 +143,23 @@ def render_chart_downloads(fig, key):
 
 
 def style_chart(fig, template):
+    """Apply a consistent, readable visual system to Plotly charts."""
     fig.update_layout(
-        template=template, margin=dict(l=20, r=20, t=55, b=25),
-        title_x=0.02, hovermode="x unified", legend_title_text="",
+        template=template,
+        margin=dict(l=22, r=22, t=58, b=28),
+        title_x=0.02,
+        title_font=dict(size=17),
+        font=dict(family="Inter, ui-sans-serif, system-ui, sans-serif", size=12),
+        hovermode="x unified",
+        hoverlabel=dict(font_size=12, bgcolor="rgba(20, 32, 52, 0.94)", font_color="#ffffff"),
+        legend_title_text="",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
+    fig.update_xaxes(showgrid=False, zeroline=False, automargin=True)
+    fig.update_yaxes(
+        showgrid=True, gridcolor="rgba(120, 140, 165, 0.18)",
+        zeroline=False, automargin=True,
     )
     return fig
 
@@ -365,6 +379,13 @@ st.markdown(
     .welcome-tag {{ padding:7px 10px; border-radius:999px; border:1px solid var(--line); background:var(--card-bg); color:var(--app-text); font-size:11px; font-weight:650; }}
     .workspace-kicker {{ color:var(--accent); font-size:10px; font-weight:850; letter-spacing:1.55px; margin:2px 0 8px; }}
     .stAlert {{ border-radius:13px; }} a {{ color:var(--accent); }} hr {{ border-color:var(--line); }}
+    .stButton > button:focus-visible, .stDownloadButton > button:focus-visible,
+    [data-baseweb="tab"]:focus-visible {{
+      outline:3px solid color-mix(in srgb, var(--accent) 42%, transparent);
+      outline-offset:2px;
+    }}
+    [data-testid="stCaptionContainer"] {{ color:var(--muted-text); }}
+    
     @media (max-width:900px) {{ .brand-header {{ padding:16px 18px; }} .brand-title {{ font-size:23px; }} [data-baseweb="tab-list"] {{ overflow-x:auto; }} [data-baseweb="tab"] {{ padding:7px 10px; }} }}
     @media (max-width:600px) {{ .brand-status {{ display:none; }} .brand-title {{ font-size:21px; }} .brand-header {{ padding:14px; gap:12px; border-radius:15px; }} .brand-icon {{ width:44px; height:44px; flex-basis:44px; }} .welcome-panel {{ padding:23px 20px; border-radius:17px; }} .block-container {{ padding-left:1rem; padding-right:1rem; }} }}
     @media (prefers-reduced-motion:reduce) {{ *, *::before, *::after {{ transition:none !important; animation:none !important; }} }}
