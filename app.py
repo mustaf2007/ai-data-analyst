@@ -152,6 +152,7 @@ def set_dataset(data, source, upload_signature=None):
     st.session_state.cleaning_report = None
     st.session_state.chart_exports = {}
     st.session_state.report_artifacts = None
+    st.session_state.narrative_report_artifacts = None
     st.session_state.chat_history = []
     st.session_state.chat_context = None
     if upload_signature is not None:
