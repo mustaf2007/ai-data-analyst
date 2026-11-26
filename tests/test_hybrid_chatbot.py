@@ -92,11 +92,13 @@ def test_provider_plan_sends_schema_metadata_not_raw_rows(monkeypatch):
     plan, provider = chatbot._provider_plan(
         "total amount", df, "Free hosted AI (automatic fallback)",
         {"Groq": "test-key"},
+        history=[{"role": "user", "content": "Earlier question"}],
     )
     payload = "\n".join(item["content"] for item in sent["messages"])
     assert plan["operation"] == "aggregate"
     assert "private-row-a" not in payload and "private-row-b" not in payload
     assert "customer_note" in payload
+    assert "Earlier question" in payload
     assert provider.startswith("Groq")
 
 
@@ -113,3 +115,10 @@ def test_hybrid_planner_receives_recent_conversation_history(monkeypatch):
         "What about the average?", df, history=[{"role": "user", "content": "Tell me about sales"}],
     )
     assert seen["history"][0]["content"] == "Tell me about sales"
+
+
+
+def test_duplicate_column_names_are_rejected():
+    df = pd.DataFrame([[1, 2]], columns=["value", "value"])
+    with pytest.raises(ValueError, match="duplicate column names"):
+        chatbot.answer_hybrid_question("summarise", df)
