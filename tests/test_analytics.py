@@ -631,3 +631,16 @@ def test_build_trend_frame_rejects_duplicate_headers():
     df = pd.DataFrame([[2020, 1, 2]], columns=["Year", "GDP", "GDP"])
     with pytest.raises(DataInputError, match="column names are duplicated"):
         build_trend_frame(df, "Year", "GDP")
+
+
+def test_load_csv_makes_headers_unique_even_when_suffix_already_exists():
+    df = load_dataset("headers.csv", b"a,a,a.1,a,a.2\n1,2,3,4,5\n")
+    assert df.shape == (1, 5)
+    assert df.columns.is_unique
+
+
+def test_header_normalization_handles_generated_suffix_collisions():
+    from analytics import _make_unique_column_names
+    columns = _make_unique_column_names(["a", "a", "a.1", "a", "a.2"])
+    assert columns == ["a", "a.1", "a.1.1", "a.2", "a.2.1"]
+    assert len(columns) == len(set(columns))

@@ -107,3 +107,17 @@ def test_gemini_retries_with_current_model_after_retired_model(monkeypatch):
     assert attempted_models == ["gemini-2.5-flash", "gemini-3.8-flash"]
     assert result["answer"] == "Gemini fallback worked."
     assert result["provider"].endswith("gemini-3.8-flash")
+
+
+def test_dataset_tools_provider_answers_without_any_api_key(monkeypatch):
+    for key in ("OPENAI_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    df = pd.DataFrame({"sales": [10, 20, 30]})
+    result = ask_smart_assistant(
+        "What is the average sales?",
+        provider="Dataset tools (no AI server)",
+        df=df,
+    )
+    assert result["provider"] == "Dataset tools (no AI server)"
+    assert "20" in result["answer"]
+    assert result["evidence"].iloc[0]["mean"] == 20
