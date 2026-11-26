@@ -157,7 +157,10 @@ def _choose_test(df, question, alpha=0.05):
             result["warnings"].append("The selected categorical variables do not form a usable contingency table.")
     elif len(numeric) >= 2 and any(x in q for x in {"relationship", "correlation", "associated", "association", "related"}):
         matches = _match_columns(question, numeric)
-        a, b = (matches + numeric)[:2]
+        ordered_columns = list(dict.fromkeys(matches + numeric))
+        if len(ordered_columns) < 2:
+            return result
+        a, b = ordered_columns[:2]
         pair = df[[a, b]].dropna()
         if len(pair) >= 3 and pair[a].nunique() > 1 and pair[b].nunique() > 1:
             test = stats.pearsonr(pair[a], pair[b])
