@@ -80,3 +80,30 @@ def test_free_provider_falls_back_to_next_configured_provider(monkeypatch):
     assert result["answer"] == "A helpful answer."
     assert result["provider"].startswith("OpenRouter")
     assert len(calls) == 2
+
+
+
+def test_gemini_retries_with_current_model_after_retired_model(monkeypatch):
+    import smart_assistant
+
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-flash")
+    attempted_models = []
+
+    def fake_post_json(url, payload, headers=None, timeout=90):
+        model = payload["model"]
+        attempted_models.append(model)
+        if model == "gemini-2.5-flash":
+            raise RuntimeError(
+                "AI service returned HTTP 404: model is no longer available"
+            )
+        return {"choices": [{"message": {"content": "Gemini fallback worked."}}]}
+
+    monkeypatch.setattr(smart_assistant, "_post_json", fake_post_json)
+    result = ask_smart_assistant(
+        "Explain regression",
+        provider="Free hosted AI (automatic fallback)",
+        free_api_keys={"Google Gemini": "test-gemini-key"},
+    )
+    assert attempted_models == ["gemini-2.5-flash", "gemini-3.8-flash"]
+    assert result["answer"] == "Gemini fallback worked."
+    assert result["provider"].endswith("gemini-3.8-flash")
