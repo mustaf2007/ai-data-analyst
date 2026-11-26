@@ -57,12 +57,8 @@ def _setting(name: str, default: str = "") -> str:
 
 
 def default_assistant_provider() -> str:
-    """Prefer a configured generative provider; otherwise use deterministic tools."""
-    if _setting("OPENAI_API_KEY", ""):
-        return "OpenAI-compatible API (opt-in)"
-    if _setting("OLLAMA_BASE_URL", ""):
-        return "Ollama (local model)"
-    return "Dataset tools (no AI server)"
+    """Use the no-API-key open-source model path by default."""
+    return "Ollama (local model)"
 
 
 def _post_json(url: str, payload: dict, headers: dict | None = None, timeout: int = 90) -> dict:
