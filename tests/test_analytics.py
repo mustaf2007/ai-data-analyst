@@ -602,3 +602,32 @@ def test_anova_skips_tukey_when_variances_are_unequal():
     assert result["posthoc_comparisons"].empty
     assert any("Tukey HSD pairwise comparisons were not run" in warning
                for warning in result["warnings"])
+
+
+
+def test_build_trend_frame_excludes_same_time_and_measure_column():
+    from analytics import build_trend_frame, DataInputError
+    df = pd.DataFrame({"Year": [2020, 2019, 2021], "GDP": [2.0, 1.0, 3.0]})
+    with pytest.raises(DataInputError, match="different numeric indicator"):
+        build_trend_frame(df, "Year", "Year")
+    result = build_trend_frame(df, "Year", "GDP")
+    assert result["Year"].tolist() == [2019, 2020, 2021]
+    assert result["GDP"].tolist() == [1.0, 2.0, 3.0]
+
+
+def test_build_trend_frame_handles_invalid_dates_and_non_numeric_values():
+    from analytics import build_trend_frame
+    df = pd.DataFrame({
+        "period": ["2024-02-01", "not-a-date", "2024-01-01"],
+        "measure": ["2.5", "3.0", "bad"],
+    })
+    result = build_trend_frame(df, "period", "measure", parse_datetime=True)
+    assert len(result) == 1
+    assert result.iloc[0]["measure"] == 2.5
+
+
+def test_build_trend_frame_rejects_duplicate_headers():
+    from analytics import build_trend_frame, DataInputError
+    df = pd.DataFrame([[2020, 1, 2]], columns=["Year", "GDP", "GDP"])
+    with pytest.raises(DataInputError, match="column names are duplicated"):
+        build_trend_frame(df, "Year", "GDP")
