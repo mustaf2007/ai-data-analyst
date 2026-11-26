@@ -52,3 +52,26 @@ def test_text_report_pdf_is_generated():
         "# Executive summary\n\nThe portfolio returned -1.42%.\n\n## Recommendations\n- Review position sizing."
     )
     assert pdf.startswith(b"%PDF")
+
+
+
+def test_pdf_report_includes_financial_attribution():
+    df = pd.DataFrame({"sales": [10, 20, 30]})
+    financial = {
+        "metrics": {
+            "portfolio_return_pct": 4.5,
+            "portfolio_pnl": 450.0,
+            "reported_fees": 12.0,
+        },
+        "holdings": pd.DataFrame({
+            "ticker": ["AAA"], "cost_basis": [1000.0],
+            "market_value": [1045.0], "pnl": [45.0],
+            "return_pct": [4.5],
+        }),
+    }
+    pdf = build_pdf_report(
+        "portfolio.csv", df, profile_dataset(df), numeric_summary(df),
+        sections=["Key findings"], financial_analysis=financial,
+    )
+    assert pdf.startswith(b"%PDF")
+    assert len(pdf) > 500
