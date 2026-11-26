@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from analytics import (
     DataInputError, load_dataset, profile_dataset, column_profile, clean_dataset, build_time_series_analysis, forecast_time_series_baseline, compare_datasets, build_geographic_summary, run_statistical_test,
-    numeric_summary, categorical_summary, correlation_matrix, grouped_summary,
+    numeric_summary, categorical_summary, correlation_matrix, grouped_summary, build_trend_frame,
     infer_datetime_columns, generate_insights, generate_detailed_insights, build_data_story, safe_csv_bytes, build_cleaning_report, validate_analysis_readiness, column_quality_diagnostics,
 )
 from modeling import train_predictive_model, detect_anomalies
@@ -407,20 +407,26 @@ with tabs[0]:
                 time_col = trend_controls[0].selectbox(
                     "Time variable", time_options, key="dashboard_time_column"
                 )
-                trend_col = trend_controls[1].selectbox(
-                    "Indicator", numeric_dashboard, key="dashboard_trend_measure"
-                )
-                trend_data = df[[time_col, trend_col]].copy()
-                if time_col in time_candidates:
-                    trend_data[time_col] = pd.to_datetime(trend_data[time_col], errors="coerce")
-                trend_data = trend_data.dropna(subset=[time_col, trend_col]).sort_values(time_col)
-                trend_fig = px.line(
-                    trend_data, x=time_col, y=trend_col, markers=True,
-                    title=f"{trend_col} over time",
-                )
-                style_chart(trend_fig, theme_template)
-                st.plotly_chart(trend_fig, use_container_width=True)
-                render_chart_downloads(trend_fig, "dashboard_trend")
+                indicator_options = [column for column in numeric_dashboard if column != time_col]
+                if indicator_options:
+                    trend_col = trend_controls[1].selectbox(
+                        "Indicator", indicator_options, key="dashboard_trend_measure"
+                    )
+                    trend_data = build_trend_frame(
+                        df, time_col, trend_col, parse_datetime=time_col in time_candidates
+                    )
+                    if trend_data.empty:
+                        st.info("No usable observations are available for this time and indicator selection.")
+                    else:
+                        trend_fig = px.line(
+                            trend_data, x=time_col, y=trend_col, markers=True,
+                            title=f"{trend_col} over time",
+                        )
+                        style_chart(trend_fig, theme_template)
+                        st.plotly_chart(trend_fig, use_container_width=True)
+                        render_chart_downloads(trend_fig, "dashboard_trend")
+                else:
+                    st.info("A trend chart needs a separate numeric indicator from the selected time variable.")
 
             left_chart, right_chart = st.columns(2)
             distribution_col = left_chart.selectbox(
