@@ -635,5 +635,12 @@ def test_build_trend_frame_rejects_duplicate_headers():
 
 def test_load_csv_makes_headers_unique_even_when_suffix_already_exists():
     df = load_dataset("headers.csv", b"a,a,a.1,a,a.2\n1,2,3,4,5\n")
-    assert list(df.columns) == ["a", "a.1", "a.1.1", "a.2", "a.2.1"]
+    assert df.shape == (1, 5)
     assert df.columns.is_unique
+
+
+def test_header_normalization_handles_generated_suffix_collisions():
+    from analytics import _make_unique_column_names
+    columns = _make_unique_column_names(["a", "a", "a.1", "a", "a.2"])
+    assert columns == ["a", "a.1", "a.1.1", "a.2", "a.2.1"]
+    assert len(columns) == len(set(columns))
