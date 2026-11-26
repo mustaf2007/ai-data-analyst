@@ -20,6 +20,7 @@ from modeling import train_predictive_model, detect_anomalies
 from reporting import build_pdf_report, build_text_report_pdf
 from assistant import suggest_analyses, answer_dataset_question
 from report_assistant import build_narrative_report
+from research_reporting import build_research_report, build_research_excel, build_research_pdf
 from smart_assistant import ask_smart_assistant, build_dataset_context, default_assistant_provider
 
 st.set_page_config(page_title="AI Data Analyst", page_icon="📊", layout="wide")
@@ -131,6 +132,7 @@ def initialise_state():
         "chart_exports": {},
         "report_artifacts": None,
         "narrative_report_artifacts": None,
+        "research_report_artifacts": None,
         "chat_history": [],
         "chat_context": None,
         "smart_chat_history": [],
@@ -158,6 +160,7 @@ def set_dataset(data, source, upload_signature=None):
     st.session_state.chart_exports = {}
     st.session_state.report_artifacts = None
     st.session_state.narrative_report_artifacts = None
+    st.session_state.research_report_artifacts = None
     st.session_state.chat_history = []
     st.session_state.chat_context = None
     st.session_state.smart_chat_history = []
@@ -264,7 +267,7 @@ px.defaults.color_discrete_sequence = [accent_color, "#20a486", "#e09f3e", "#8b7
 tabs = st.tabs([
     "Dashboard", "Data quality", "Clean data", "Explore", "Relationships",
     "Predictive modeling", "Anomalies", "Export & report", "Chart Studio", "Automated insights", "Data story", "Time-series intelligence", "Dataset comparison", "Geographic intelligence", "Statistical testing",
-    "Analysis suggestions", "Ask the data", "AI narrative report", "Smart AI assistant",
+    "Analysis suggestions", "Ask the data", "AI narrative report", "Research report builder", "Smart AI assistant",
 ])
 
 with tabs[0]:
@@ -1476,6 +1479,154 @@ with tabs[17]:
 
 
 with tabs[18]:
+    st.subheader("Research report builder")
+    st.caption(
+        "Turn a research question and the active dataset into a structured, evidence-led report. "
+        "Analysis, chart data and exports are generated locally; no AI API key is required."
+    )
+    st.info(
+        "The question guides automatic variable matching. Review the selected statistical test, "
+        "variable relevance and assumptions before using results in a publication or policy decision."
+    )
+    with st.form("research_report_builder_form"):
+        research_title = st.text_input(
+            "Report title", "Research and Data Analysis Report",
+            key="research_report_title",
+        )
+        research_question = st.text_area(
+            "Research question",
+            placeholder="Example: Does average household expenditure differ across regions?",
+            height=90, key="research_question",
+        )
+        research_objectives = st.text_area(
+            "Research objectives (optional)",
+            placeholder="List the specific objectives this report should address...",
+            height=75, key="research_objectives",
+        )
+        research_author = st.text_input(
+            "Prepared by / organisation (optional)", key="research_report_author"
+        )
+        research_alpha = st.selectbox(
+            "Statistical significance threshold",
+            [0.01, 0.05, 0.10], index=1, key="research_report_alpha",
+        )
+        generate_research = st.form_submit_button(
+            "Generate evidence-based research report", type="primary",
+            use_container_width=True,
+        )
+
+    if generate_research:
+        try:
+            research_result = build_research_report(
+                df, research_question,
+                title=research_title.strip() or "Research and Data Analysis Report",
+                objectives=research_objectives.strip(),
+                prepared_by=research_author.strip(),
+                source=st.session_state.source or "Active dataset",
+                alpha=research_alpha,
+            )
+            with st.spinner("Preparing PDF and Excel evidence pack..."):
+                research_pdf = build_research_pdf(research_result)
+                research_xlsx = build_research_excel(df, research_result)
+            st.session_state.research_report_artifacts = {
+                "report": research_result, "pdf": research_pdf,
+                "xlsx": research_xlsx,
+            }
+        except (ValueError, TypeError, KeyError) as exc:
+            st.session_state.research_report_artifacts = None
+            st.error(f"Research report could not be generated: {exc}")
+        except Exception as exc:
+            st.session_state.research_report_artifacts = None
+            st.error(f"Report export failed. Review the dataset and try again. Detail: {exc}")
+
+    research_artifacts = st.session_state.get("research_report_artifacts")
+    if research_artifacts:
+        research_result = research_artifacts["report"]
+        st.divider()
+        st.markdown("### Report overview")
+        kpis = st.columns(4)
+        kpis[0].metric("Records analysed", f"{research_result['profile']['rows']:,}")
+        kpis[1].metric("Variables", f"{research_result['profile']['columns']:,}")
+        kpis[2].metric("Missing cells", f"{research_result['profile']['missing_cells']:,}")
+        kpis[3].metric("Evidence statements", len(research_result["findings"]))
+
+        st.markdown("### Research question")
+        st.write(research_result["research_question"])
+        st.markdown("### Executive summary")
+        st.write(research_result["executive_summary"])
+
+        st.markdown("### Key findings")
+        for finding in research_result["findings"]:
+            st.markdown("• " + finding)
+
+        st.markdown("### Statistical analysis")
+        test_result = research_result["test"]
+        test_cols = st.columns(4)
+        test_cols[0].metric("Method", test_result["test"])
+        test_cols[1].metric("Observations", f"{test_result['n']:,}")
+        test_cols[2].metric(
+            "p-value", f"{test_result['p_value']:.5g}"
+            if test_result.get("p_value") is not None else "Not calculated",
+        )
+        test_cols[3].metric(
+            test_result.get("effect_size_name") or "Effect size",
+            f"{test_result['effect_size']:.4g}"
+            if test_result.get("effect_size") is not None else "Not available",
+        )
+        st.write(test_result["interpretation"])
+        for warning in test_result.get("warnings", []):
+            st.warning(warning)
+
+        st.markdown("### Automatically generated charts")
+        for chart_index, chart in enumerate(research_result["charts"]):
+            st.plotly_chart(
+                chart["figure"], use_container_width=True,
+                key=f"research_report_chart_{chart_index}",
+            )
+        st.markdown("### Evidence tables")
+        with st.expander("Numeric summary", expanded=True):
+            st.dataframe(research_result["numeric_summary"], use_container_width=True, hide_index=True)
+        with st.expander("Category summary"):
+            st.dataframe(research_result["category_summary"], use_container_width=True, hide_index=True)
+        with st.expander("Correlation evidence"):
+            st.dataframe(research_result["correlations"], use_container_width=True, hide_index=True)
+        st.markdown("### Methodology")
+        for method_item in research_result["methodology"]:
+            st.markdown("• " + method_item)
+        st.markdown("### Recommendations")
+        st.dataframe(research_result["recommendations"], use_container_width=True, hide_index=True)
+        st.markdown("### Limitations and interpretation safeguards")
+        for limitation in research_result["limitations"]:
+            st.markdown("• " + limitation)
+
+        st.divider()
+        st.markdown("### Download complete report and evidence")
+        downloads = st.columns(3)
+        downloads[0].download_button(
+            "Download PDF report", research_artifacts["pdf"],
+            "research_analysis_report.pdf", "application/pdf",
+            key="download_research_report_pdf", use_container_width=True,
+        )
+        downloads[1].download_button(
+            "Download Excel evidence workbook", research_artifacts["xlsx"],
+            "research_analysis_evidence.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_research_report_excel", use_container_width=True,
+        )
+        downloads[2].download_button(
+            "Download Markdown report", research_result["markdown"],
+            "research_analysis_report.md", "text/markdown",
+            key="download_research_report_markdown", use_container_width=True,
+        )
+    else:
+        st.info(
+            "Enter your research question above and generate the report. "
+            "The Excel workbook will include the source data, evidence tables, statistical results, "
+            "recommendations and chart-ready data."
+        )
+
+
+with tabs[19]:
     st.subheader("Smart AI Assistant")
     st.caption("Ask general questions, explore your dataset, interpret analytical results, and draft technical reports.")
     provider = st.selectbox(
