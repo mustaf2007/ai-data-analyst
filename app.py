@@ -1758,6 +1758,7 @@ with tabs[5]:
         st.caption("Ask general questions, explore your dataset, interpret analytical results, and draft technical reports.")
         provider_options = [
             "Browser AI (open-source · no API key)",
+            "Dataset tools (no AI server)",
             "Free hosted AI (automatic fallback)",
             "Ollama (local model)",
             "OpenAI-compatible API (opt-in)",
@@ -1789,7 +1790,13 @@ with tabs[5]:
             st.components.v1.html(browser_html, height=760, scrolling=True)
         else:
             free_api_keys = {}
-            if provider == "Free hosted AI (automatic fallback)":
+            if provider == "Dataset tools (no AI server)":
+                st.info(
+                    "No API key, model download, GPU or external AI service is required. "
+                    "This built-in assistant answers supported questions by calculating results "
+                    "directly from the active dataset. It is not a general-purpose generative model."
+                )
+            elif provider == "Free hosted AI (automatic fallback)":
                 st.markdown("Connect one or more free-tier providers. The assistant tries them in order and switches to the next configured provider if one is unavailable.")
                 with st.expander("Free AI setup · API keys", expanded=True):
                     st.caption("Create a free developer key with a provider, then paste it here. Keys are password-masked and used only for this Streamlit session; they are not saved in the repository.")
