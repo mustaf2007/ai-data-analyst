@@ -1701,15 +1701,30 @@ with tabs[5]:
     with assistant_tabs[1]:
         st.subheader("Smart AI Assistant")
         st.caption("Ask general questions, explore your dataset, interpret analytical results, and draft technical reports.")
+        provider_options = [
+            "Free hosted AI (automatic fallback)",
+            "Ollama (local model)",
+            "OpenAI-compatible API (opt-in)",
+        ]
         provider = st.selectbox(
-            "AI model",
-            ["Ollama (local model)", "OpenAI-compatible API (opt-in)"],
-            help="The Smart AI Assistant is a general-purpose chatbot. Ollama supports open-ended questions without an API key when connected to a running model. The optional API provider requires its own credentials and may have usage charges or limits.",
-            index=["Ollama (local model)", "OpenAI-compatible API (opt-in)"].index(default_assistant_provider()),
+            "AI model", provider_options,
+            help="Use free hosted AI with automatic fallback, a local Ollama model, or an optional OpenAI-compatible endpoint.",
+            index=provider_options.index(default_assistant_provider()),
             key="smart_assistant_provider",
         )
-        if provider == "Ollama (local model)":
-            st.info("General-purpose AI chat with no API key. Install Ollama and download a model (for example, `ollama pull llama3.1:8b`). On the same computer, the default address is `http://localhost:11434`. On Streamlit Cloud, configure OLLAMA_BASE_URL to a secure, reachable Ollama server and OLLAMA_MODEL to an installed model. The URL is not an API key. Availability and usage depend on your model server.")
+        free_api_keys = {}
+        if provider == "Free hosted AI (automatic fallback)":
+            st.markdown("Connect one or more free-tier providers. The assistant tries them in order and switches to the next configured provider if one is unavailable.")
+            with st.expander("Free AI setup · API keys", expanded=True):
+                st.caption("Create a free developer key with a provider, then paste it here. Keys are password-masked and used only for this Streamlit session; they are not saved in the repository.")
+                groq_key = st.text_input("Groq API key", type="password", key="smart_groq_key", help="Free-tier access is subject to model and account limits.")
+                openrouter_key = st.text_input("OpenRouter API key", type="password", key="smart_openrouter_key", help="Free-model availability and daily limits can change.")
+                gemini_key = st.text_input("Google Gemini API key", type="password", key="smart_gemini_key", help="Google AI Studio free-tier limits and data terms apply.")
+                free_api_keys = {"Groq": groq_key, "OpenRouter": openrouter_key, "Google Gemini": gemini_key}
+                st.markdown("[Get a Groq key](https://console.groq.com/keys) · [Get an OpenRouter key](https://openrouter.ai/keys) · [Get a Gemini key](https://aistudio.google.com/apikey)")
+            st.info("No single provider is guaranteed to be available all the time. Add two or more keys for better fallback. Free plans have quotas and can change. Your question and recent chat are sent to the selected provider; dataset column names and aggregate summaries may also be sent, but raw dataset rows are not included.")
+        elif provider == "Ollama (local model)":
+            st.info("General-purpose AI chat with no API key when a model server is reachable. Install Ollama and download a model (for example, ollama pull llama3.1:8b). On the same computer, the default address is http://localhost:11434. On Streamlit Cloud, configure OLLAMA_BASE_URL to a secure, reachable Ollama server and OLLAMA_MODEL to an installed model.")
         else:
             st.warning("This optional provider sends your question, recent chat context, and—when available—dataset column names and aggregate summaries, not raw dataset rows. Configure OPENAI_API_KEY and optional OPENAI_BASE_URL / OPENAI_MODEL as deployment secrets. Provider usage limits and charges may apply.")
 
@@ -1745,6 +1760,7 @@ with tabs[5]:
                     provider=provider,
                     df=df,
                     context=st.session_state.smart_chat_context,
+                    free_api_keys=free_api_keys,
                 )
                 st.session_state.smart_chat_context = result.get("context", st.session_state.smart_chat_context)
                 st.session_state.smart_chat_history.append({
