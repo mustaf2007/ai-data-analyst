@@ -39,3 +39,18 @@ def test_narrative_report_handles_categorical_only_data():
 def test_narrative_report_rejects_empty_data():
     with pytest.raises(ValueError):
         build_narrative_report(pd.DataFrame())
+
+
+
+def test_report_supports_professional_metadata_and_purpose():
+    report = build_narrative_report(
+        pd.DataFrame({"revenue": [100, 120, 140]}),
+        "financials.csv",
+        report_title="Quarterly Performance Technical Report",
+        prepared_by="Research Unit",
+        report_type="Financial / investment performance report",
+        purpose="Assess performance and support allocation decisions.",
+    )
+    assert "# Quarterly Performance Technical Report" in report["markdown"]
+    assert "**Prepared by:** Research Unit" in report["markdown"]
+    assert "Assess performance" in report["executive_summary"]
