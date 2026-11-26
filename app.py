@@ -1778,6 +1778,7 @@ with tabs[5]:
                 if chat_mode == "Hybrid AI (choose provider)":
                     result = answer_hybrid_question(
                         prompt, df, provider=hybrid_provider, free_api_keys=hybrid_keys,
+                        history=st.session_state.chat_history[:-1],
                     )
                     provider_label = f"Hybrid AI · {result.get('provider', hybrid_provider)}"
                 else:
