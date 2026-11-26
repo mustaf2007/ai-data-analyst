@@ -35,9 +35,9 @@ st.markdown(
       <div class="brand-copy">
         <div class="brand-eyebrow">UNIVERSAL DATA INTELLIGENCE</div>
         <div class="brand-title">AI Data Analyst</div>
-        <div class="brand-subtitle">Explore data. Discover evidence. Make better decisions.</div>
+        <div class="brand-subtitle">A clear workspace for exploring data and making evidence-led decisions.</div>
       </div>
-      <div class="brand-status">LOCAL-FIRST WORKSPACE</div>
+      <div class="brand-status">ANALYTICS WORKSPACE</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -207,6 +207,16 @@ def set_dataset(data, source, upload_signature=None):
 initialise_state()
 
 with st.sidebar:
+    st.markdown(
+        """
+        <div class="sidebar-brand">
+          <div class="sidebar-brand-mark">AD</div>
+          <div><div class="sidebar-brand-title">Data workspace</div>
+          <div class="sidebar-brand-caption">Your analysis, in one place</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.header("Workspace")
     selected_theme = st.selectbox(
         "Appearance", ["Light", "Dark", "Green", "Ocean", "Purple", "Sand"],
@@ -286,70 +296,121 @@ with st.sidebar:
         )
         st.caption("Changes are held in this session. Avoid uploading confidential data to a public demo.")
 
-    st.caption("CSV and XLSX · Local processing · No API key for core analysis")
+    st.caption("CSV and XLSX · Session-based processing · No API key for core analysis")
 
 theme_css = {
-    "Light": ("#f4f7fb", "#ffffff", "#172b4d", "#64748b", "#2563eb"),
-    "Dark": ("#101827", "#182437", "#e5edf8", "#a8b6c9", "#60a5fa"),
-    "Green": ("#eef6f0", "#ffffff", "#173b2b", "#557363", "#16845b"),
-    "Ocean": ("#edf5fb", "#ffffff", "#15324b", "#58758d", "#087eae"),
-    "Purple": ("#f4f0fb", "#ffffff", "#30234d", "#76678f", "#7652c8"),
-    "Sand": ("#f8f4ec", "#fffdf8", "#43372b", "#847766", "#a66a32"),
+    "Light": ("#f5f7fb", "#ffffff", "#172033", "#667085", "#3563e9", "#dfe5ef", "#edf2ff"),
+    "Dark": ("#0d1422", "#151f31", "#e8edf7", "#9aa9bf", "#7ba7ff", "#2b3950", "#1d2b43"),
+    "Green": ("#f1f7f2", "#ffffff", "#193b2b", "#617b6b", "#247a55", "#dce9df", "#eaf4ed"),
+    "Ocean": ("#eff6fb", "#ffffff", "#17364e", "#607c91", "#087eae", "#dce8f0", "#e8f4fa"),
+    "Purple": ("#f6f3fb", "#ffffff", "#33264e", "#7b6e91", "#7654bd", "#e7e0f1", "#f0eafa"),
+    "Sand": ("#faf6ef", "#fffefa", "#493b2d", "#897967", "#a66b35", "#e9dfd1", "#f5ede1"),
 }
-page_bg, card_bg, text_color, muted_color, accent_color = theme_css[selected_theme]
+page_bg, card_bg, text_color, muted_color, accent_color, border_color, soft_accent = theme_css[selected_theme]
 st.markdown(
     f"""
     <style>
-    :root {{ --app-bg: {page_bg}; --card-bg: {card_bg}; --app-text: {text_color};
-             --muted-text: {muted_color}; --accent: {accent_color}; }}
-    .stApp {{ background: var(--app-bg); color: var(--app-text); }}
-    [data-testid="stSidebar"] {{ background: var(--card-bg); }}
-    [data-testid="stMetric"], [data-testid="stVerticalBlockBorderWrapper"] {{
-        background: var(--card-bg); border: 1px solid color-mix(in srgb, var(--muted-text) 20%, transparent);
-        border-radius: 14px;
+    :root {{
+      --app-bg: {page_bg}; --card-bg: {card_bg}; --app-text: {text_color};
+      --muted-text: {muted_color}; --accent: {accent_color};
+      --line: {border_color}; --accent-soft: {soft_accent};
+      --surface-muted: color-mix(in srgb, var(--card-bg) 88%, var(--app-bg));
+      --shadow-soft: 0 8px 28px rgba(20, 35, 60, .055);
     }}
-    [data-testid="stMetric"] {{ padding: 14px 16px; }}
-    [data-testid="stMetricLabel"], [data-testid="stCaptionContainer"] {{ color: var(--muted-text); }}
-    .stButton > button, .stDownloadButton > button {{
-        border-radius: 10px; border-color: var(--accent); transition: all .15s ease;
+    .stApp {{
+      background: radial-gradient(ellipse at 12% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 36%), var(--app-bg);
+      color: var(--app-text);
     }}
-    .stButton > button[kind="primary"] {{ background: var(--accent); border-color: var(--accent); }}
-    [data-baseweb="tab-list"] {{ gap: .35rem; }}
-    [data-baseweb="tab"] {{ border-radius: 9px 9px 0 0; }}
-    [data-testid="stChatMessage"] {{ background: var(--card-bg); border-radius: 14px; }}
-    [data-testid="stDataFrame"], [data-testid="stTable"] {{ border-radius: 12px; }}
-    .block-container {{ max-width: 1580px; padding-top: 1.2rem; padding-bottom: 3rem; }}
-    .brand-header {{ display:flex; align-items:center; gap:16px; padding:18px 22px;
-      margin:0 0 18px 0; border:1px solid color-mix(in srgb, var(--muted-text) 20%, transparent);
-      border-radius:18px; background:linear-gradient(115deg, var(--card-bg), color-mix(in srgb, var(--accent) 7%, var(--card-bg))); }}
-    .brand-icon {{ display:flex; align-items:center; justify-content:center; width:48px; height:48px;
-      flex:0 0 48px; border-radius:14px; background:var(--accent); color:white; font-weight:800; letter-spacing:-1px; }}
+    .block-container {{ max-width:1500px; padding-top:1.4rem; padding-bottom:3.5rem; }}
+    [data-testid="stSidebar"] {{ background:var(--card-bg); border-right:1px solid var(--line); }}
+    [data-testid="stSidebar"] > div:first-child {{ padding-top:1.15rem; }}
+    .sidebar-brand {{ display:flex; align-items:center; gap:11px; padding:10px 4px 18px; margin-bottom:12px; border-bottom:1px solid var(--line); }}
+    .sidebar-brand-mark {{ display:flex; align-items:center; justify-content:center; width:38px; height:38px; border-radius:12px; background:var(--accent); color:#fff; font-size:13px; font-weight:850; letter-spacing:-.5px; box-shadow:0 5px 14px color-mix(in srgb, var(--accent) 22%, transparent); }}
+    .sidebar-brand-title {{ color:var(--app-text); font-size:14px; font-weight:800; }}
+    .sidebar-brand-caption {{ color:var(--muted-text); font-size:11px; margin-top:2px; }}
+    .brand-header {{ display:flex; align-items:center; gap:16px; padding:20px 24px; margin:0 0 22px; border:1px solid var(--line); border-radius:20px; background:linear-gradient(112deg, var(--card-bg), color-mix(in srgb, var(--accent) 8%, var(--card-bg))); box-shadow:var(--shadow-soft); }}
+    .brand-icon {{ display:flex; align-items:center; justify-content:center; width:52px; height:52px; flex:0 0 52px; border-radius:16px; background:linear-gradient(145deg, var(--accent), color-mix(in srgb, var(--accent) 68%, #172033)); color:white; font-size:17px; font-weight:850; letter-spacing:-1px; box-shadow:0 7px 18px color-mix(in srgb, var(--accent) 24%, transparent); }}
     .brand-copy {{ min-width:0; }}
-    .brand-eyebrow {{ color:var(--accent); font-size:10px; font-weight:800; letter-spacing:1.5px; }}
-    .brand-title {{ color:var(--app-text); font-size:25px; line-height:1.2; font-weight:800; letter-spacing:-.8px; }}
-    .brand-subtitle {{ color:var(--muted-text); font-size:13px; margin-top:3px; }}
-    .brand-status {{ margin-left:auto; padding:7px 10px; border:1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-      border-radius:999px; color:var(--accent); font-size:10px; font-weight:800; letter-spacing:.7px; white-space:nowrap; }}
-    [data-baseweb="tab-list"] {{ gap:.45rem; padding:7px; border-radius:13px;
-      background:color-mix(in srgb, var(--muted-text) 8%, var(--card-bg)); }}
-    [data-baseweb="tab"] {{ border-radius:9px; padding:8px 13px; border:1px solid transparent; font-weight:650; }}
-    [data-baseweb="tab"][aria-selected="true"] {{ background:var(--card-bg); border-color:color-mix(in srgb, var(--accent) 40%, transparent); color:var(--accent); }}
+    .brand-eyebrow {{ color:var(--accent); font-size:10px; font-weight:850; letter-spacing:1.7px; }}
+    .brand-title {{ color:var(--app-text); font-size:27px; line-height:1.2; font-weight:850; letter-spacing:-1px; }}
+    .brand-subtitle {{ color:var(--muted-text); font-size:13px; margin-top:5px; }}
+    .brand-status {{ margin-left:auto; padding:8px 11px; border:1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius:999px; color:var(--accent); background:var(--accent-soft); font-size:9px; font-weight:850; letter-spacing:.85px; white-space:nowrap; }}
+    h1, h2, h3, h4 {{ color:var(--app-text); letter-spacing:-.035em; }}
+    h2 {{ font-weight:800; }} h3, h4 {{ font-weight:750; }}
+    p, li {{ line-height:1.62; }}
+    [data-testid="stMetric"] {{ background:var(--card-bg); border:1px solid var(--line); border-radius:16px; padding:16px 17px; box-shadow:var(--shadow-soft); transition:transform .16s ease, border-color .16s ease; }}
+    [data-testid="stMetric"]:hover {{ transform:translateY(-2px); border-color:color-mix(in srgb, var(--accent) 45%, var(--line)); }}
+    [data-testid="stMetricLabel"] {{ color:var(--muted-text); font-size:12px; font-weight:650; }}
+    [data-testid="stMetricValue"] {{ color:var(--app-text); font-weight:800; letter-spacing:-.7px; }}
+    [data-testid="stVerticalBlockBorderWrapper"] {{ background:var(--card-bg); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow-soft); }}
+    [data-testid="stDataFrame"], [data-testid="stTable"] {{ border:1px solid var(--line); border-radius:13px; overflow:hidden; }}
+    [data-testid="stChatMessage"] {{ background:var(--card-bg); border:1px solid var(--line); border-radius:15px; padding:13px 16px; margin-bottom:10px; }}
+    [data-testid="stExpander"] {{ border:1px solid var(--line); border-radius:13px; background:var(--card-bg); overflow:hidden; }}
+    [data-testid="stFileUploaderDropzone"] {{ border:1.5px dashed color-mix(in srgb, var(--accent) 48%, var(--line)); border-radius:14px; background:var(--accent-soft); }}
+    [data-baseweb="select"] > div, [data-baseweb="input"] > div, [data-baseweb="textarea"] > div {{ border-radius:11px !important; border-color:var(--line) !important; }}
+    [data-baseweb="select"] > div:focus-within, [data-baseweb="input"] > div:focus-within, [data-baseweb="textarea"] > div:focus-within {{ border-color:var(--accent) !important; box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent) !important; }}
+    .stButton > button, .stDownloadButton > button {{ min-height:40px; border-radius:11px; border:1px solid var(--line); font-weight:650; transition:all .16s ease; }}
+    .stButton > button[kind="primary"] {{ background:var(--accent); border-color:var(--accent); color:#fff; box-shadow:0 4px 12px color-mix(in srgb, var(--accent) 18%, transparent); }}
+    .stButton > button:hover, .stDownloadButton > button:hover {{ border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }}
+    .stButton > button[kind="primary"]:hover {{ background:color-mix(in srgb, var(--accent) 88%, #000); color:#fff; }}
+    [data-baseweb="tab-list"] {{ gap:6px; padding:7px; border:1px solid var(--line); border-radius:15px; background:var(--surface-muted); margin-bottom:18px; }}
+    [data-baseweb="tab"] {{ min-height:42px; padding:8px 15px; border-radius:10px; border:1px solid transparent; font-weight:700; color:var(--muted-text); }}
+    [data-baseweb="tab"][aria-selected="true"] {{ background:var(--card-bg); border-color:var(--line); color:var(--accent); box-shadow:0 2px 8px rgba(20,35,60,.06); }}
     [data-baseweb="tab-highlight"] {{ background:var(--accent); height:2px; }}
-    [data-testid="stSidebar"] {{ border-right:1px solid color-mix(in srgb, var(--muted-text) 18%, transparent); }}
-    [data-testid="stFileUploaderDropzone"] {{ border:1px dashed color-mix(in srgb, var(--accent) 55%, transparent); border-radius:12px; }}
-    [data-testid="stExpander"] {{ border:1px solid color-mix(in srgb, var(--muted-text) 18%, transparent); border-radius:12px; }}
-    .stButton > button:hover, .stDownloadButton > button:hover {{ border-color:var(--accent); color:var(--accent); }}
-    h1, h2, h3 {{ letter-spacing: -0.025em; }}
-    @media (max-width: 700px) {{ .brand-status {{ display:none; }} .brand-title {{ font-size:21px; }} .brand-header {{ padding:14px; }} }}
+    .welcome-panel {{ padding:34px 36px; margin:4px 0 20px; border:1px solid var(--line); border-radius:22px; background:linear-gradient(118deg, var(--card-bg) 5%, var(--accent-soft) 100%); box-shadow:var(--shadow-soft); }}
+    .welcome-kicker {{ color:var(--accent); font-size:10px; font-weight:850; letter-spacing:1.7px; }}
+    .welcome-title {{ color:var(--app-text); font-size:clamp(27px, 4vw, 39px); line-height:1.12; font-weight:850; letter-spacing:-1.5px; margin:9px 0 10px; }}
+    .welcome-copy {{ max-width:760px; color:var(--muted-text); font-size:14px; line-height:1.7; }}
+    .welcome-tags {{ display:flex; flex-wrap:wrap; gap:8px; margin-top:19px; }}
+    .welcome-tag {{ padding:7px 10px; border-radius:999px; border:1px solid var(--line); background:var(--card-bg); color:var(--app-text); font-size:11px; font-weight:650; }}
+    .workspace-kicker {{ color:var(--accent); font-size:10px; font-weight:850; letter-spacing:1.55px; margin:2px 0 8px; }}
+    .stAlert {{ border-radius:13px; }} a {{ color:var(--accent); }} hr {{ border-color:var(--line); }}
+    @media (max-width:900px) {{ .brand-header {{ padding:16px 18px; }} .brand-title {{ font-size:23px; }} [data-baseweb="tab-list"] {{ overflow-x:auto; }} [data-baseweb="tab"] {{ padding:7px 10px; }} }}
+    @media (max-width:600px) {{ .brand-status {{ display:none; }} .brand-title {{ font-size:21px; }} .brand-header {{ padding:14px; gap:12px; border-radius:15px; }} .brand-icon {{ width:44px; height:44px; flex-basis:44px; }} .welcome-panel {{ padding:23px 20px; border-radius:17px; }} .block-container {{ padding-left:1rem; padding-right:1rem; }} }}
+    @media (prefers-reduced-motion:reduce) {{ *, *::before, *::after {{ transition:none !important; animation:none !important; }} }}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 if st.session_state.active is None:
-    st.info("Upload a CSV/XLSX dataset or load the built-in sample to begin.")
-    st.markdown("**Explore · Clean · Visualize · Model · Report**")
-    st.markdown("Choose a workspace appearance from the sidebar. The theme applies before a dataset is loaded.")
+    st.markdown(
+        """
+        <section class="welcome-panel">
+          <div class="welcome-kicker">WELCOME TO YOUR ANALYTICS WORKSPACE</div>
+          <div class="welcome-title">Turn your data into<br>clearer decisions.</div>
+          <div class="welcome-copy">
+            Explore datasets, uncover patterns, assess data quality and build
+            evidence-led reports in one focused workspace. Start with a CSV or
+            Excel file, or connect to a curated public data source from the sidebar.
+          </div>
+          <div class="welcome-tags">
+            <span class="welcome-tag">01 · Explore</span><span class="welcome-tag">02 · Prepare</span>
+            <span class="welcome-tag">03 · Analyze</span><span class="welcome-tag">04 · Model</span>
+            <span class="welcome-tag">05 · Report</span>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown('<div class="workspace-kicker">GET STARTED</div>', unsafe_allow_html=True)
+    start_cols = st.columns(3)
+    with start_cols[0]:
+        with st.container(border=True):
+            st.markdown("#### <span style='color:var(--accent)'>01</span> Upload a dataset", unsafe_allow_html=True)
+            st.write("Bring a CSV or XLSX file into your session and start exploring its structure.")
+            st.caption("Use the upload area in the sidebar.")
+    with start_cols[1]:
+        with st.container(border=True):
+            st.markdown("#### <span style='color:var(--accent)'>02</span> Explore sample data", unsafe_allow_html=True)
+            st.write("Try the built-in business dataset to see the analysis workspace in action.")
+            st.caption("Select **Load built-in sample** in the sidebar.")
+    with start_cols[2]:
+        with st.container(border=True):
+            st.markdown("#### <span style='color:var(--accent)'>03</span> Connect open data", unsafe_allow_html=True)
+            st.write("Start with curated public indicators from supported open-data providers.")
+            st.caption("Expand **Connect public open data** in the sidebar.")
+    st.caption("Choose Light, Dark, Green, Ocean, Purple or Sand from Appearance in the sidebar.")
     st.stop()
 
 df = st.session_state.active
@@ -361,7 +422,8 @@ theme_templates = {
 theme_template = theme_templates[selected_theme]
 px.defaults.template = theme_template
 px.defaults.color_discrete_sequence = [accent_color, "#20a486", "#e09f3e", "#8b78c6", "#4c9bd6"]
-tabs = st.tabs(["Overview", "Prepare", "Analyze", "Models", "Reports", "Assistant"])
+st.markdown('<div class="workspace-kicker">YOUR WORKSPACE · SIX CONNECTED MODULES</div>', unsafe_allow_html=True)
+tabs = st.tabs(["◫ Overview", "✧ Prepare", "⌁ Analyze", "◎ Models", "▤ Reports", "✳ Assistant"])
 
 with tabs[0]:
         st.subheader(st.session_state.source)
