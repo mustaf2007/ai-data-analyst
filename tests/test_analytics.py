@@ -663,3 +663,37 @@ def test_load_csv_treats_whitespace_only_text_cells_as_missing():
     assert cleaned["region"].isna().sum() == 0
     assert cleaned["notes"].isna().sum() == 0
 
+
+
+def test_dataset_state_invalidation_clears_all_dataset_dependent_results():
+    from session_state import clear_dataset_derived_state
+
+    state = {
+        "model_result": {"metrics": {"r2": 0.9}},
+        "anomalies": pd.DataFrame({"anomaly_flag": [True]}),
+        "model_config": {"target": "sales"},
+        "anomaly_config": {"contamination": 0.05},
+        "statistical_test_result": {"p_value": 0.001},
+        "comparison_result": {"summary": pd.DataFrame({"rows": [10, 20]})},
+        "comparison_signature": "previous-upload-signature",
+    }
+
+    clear_dataset_derived_state(state)
+
+    assert state == {
+        "model_result": None,
+        "anomalies": None,
+        "model_config": None,
+        "anomaly_config": None,
+        "statistical_test_result": None,
+        "comparison_result": None,
+        "comparison_signature": None,
+    }
+
+
+def test_datetime_inference_includes_native_datetime_columns():
+    df = pd.DataFrame({
+        "observation_period": pd.date_range("2025-01-01", periods=3, freq="MS"),
+        "value": [10, 20, 30],
+    })
+    assert infer_datetime_columns(df) == ["observation_period"]

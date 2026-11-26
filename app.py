@@ -24,6 +24,7 @@ from report_assistant import build_narrative_report
 from smart_assistant import ask_smart_assistant, build_dataset_context, default_assistant_provider
 from browser_ai import build_browser_ai_html
 from open_sources import list_open_datasets, load_open_dataset
+from session_state import clear_dataset_derived_state
 
 st.set_page_config(page_title="AI Data Analyst", page_icon="📊", layout="wide")
 st.markdown(
@@ -158,6 +159,9 @@ def initialise_state():
         "anomalies": None,
         "model_config": None,
         "anomaly_config": None,
+        "statistical_test_result": None,
+        "comparison_result": None,
+        "comparison_signature": None,
         "cleaning_report": None,
         "chart_exports": {},
         "report_artifacts": None,
@@ -175,10 +179,7 @@ def initialise_state():
 
 
 def clear_derived_results():
-    st.session_state.model_result = None
-    st.session_state.anomalies = None
-    st.session_state.model_config = None
-    st.session_state.anomaly_config = None
+    clear_dataset_derived_state(st.session_state)
 
 
 def set_dataset(data, source, upload_signature=None):
