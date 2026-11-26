@@ -83,10 +83,20 @@ def detect_anomalies(df,contamination=.05):
             "The dataset already contains reserved anomaly output column(s): "
             + ", ".join(sorted(reserved)) + ". Rename them before running anomaly detection."
         )
-    n=df.select_dtypes(include=np.number)
-    if n.shape[1]<1 or len(n)<10:
+    n = df.select_dtypes(include=np.number)
+    if n.shape[1] < 1 or len(n) < 10:
         raise ValueError("Anomaly detection requires at least one numeric column and 10 rows.")
-    x=n.replace([np.inf,-np.inf],np.nan).fillna(n.median()).fillna(0)
+    numeric = n.replace([np.inf, -np.inf], np.nan)
+    varying_columns = [
+        column for column in numeric.columns
+        if numeric[column].nunique(dropna=True) > 1
+    ]
+    if not varying_columns:
+        raise ValueError(
+            "Anomaly detection requires at least one numeric feature with variation. "
+            "Constant and entirely missing columns cannot identify anomalies."
+        )
+    x = numeric[varying_columns].fillna(numeric[varying_columns].median()).fillna(0)
     model=IsolationForest(contamination=contamination,random_state=42,n_estimators=150)
     labels=model.fit_predict(x); out=df.copy()
     out["anomaly_flag"]=np.where(labels==-1,"Anomaly","Normal"); out["anomaly_score"]=model.decision_function(x)
