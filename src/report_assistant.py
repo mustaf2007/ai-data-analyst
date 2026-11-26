@@ -157,6 +157,8 @@ def build_narrative_report(
         "fully duplicated rows. The findings below are descriptive and should be "
         "interpreted alongside the data's provenance, definitions and sampling design."
     )
+    if purpose.strip():
+        executive += " Report purpose: " + purpose.strip()
     methodology = (
         "This report uses descriptive calculations on the active dataset: row/column "
         "counts, missingness, exact duplicate-row counts, numeric means/medians/standard "
