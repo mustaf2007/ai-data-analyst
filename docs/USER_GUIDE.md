@@ -18,6 +18,7 @@
 - **Analyze — Insights / Data story / Recommendations:** review deterministic findings and evidence, prepare audience-oriented narratives and see suggested next analytical steps.
 - **Models — Predictive model / Anomalies:** run exploratory Random Forest baselines or anomaly screening when the data meets the stated requirements. Validate results independently before operational use.
 - **Reports — Research report:** enter a research question, optional objectives, report title and significance threshold. Review the selected test, variables, sample size, p-value, effect size, charts, methodology and limitations. Download PDF, Markdown and Excel evidence outputs.
+- **Reports — Specialist report:** prepare a technical, financial/investment, research/policy, monitoring/evaluation or market/business report. Financial metrics are calculated only when required fields are explicit and unambiguous; PDF and Excel outputs can include financial metrics and holdings attribution.
 - **Reports — PDF & Excel export:** create a configurable general analysis report and export the active dataset.
 - **Assistant — Ask the data:** ask supported questions answered through deterministic calculations on the active dataset.
 - **Assistant — AI assistant:** select dataset tools for offline calculations, Ollama for generative AI without an API key (requires a local or reachable self-hosted model), or an optional OpenAI-compatible endpoint.
