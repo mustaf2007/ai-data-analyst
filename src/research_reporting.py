@@ -105,8 +105,7 @@ def _choose_test(df, question):
         subset = df[[target, group]].dropna()
         levels = subset[group].unique()
         samples = [subset.loc[subset[group] == level, target].astype(float).values for level in levels]
-        samples = [x for x in samples if len(x) >= 2]
-        if len(samples) == 2:
+        if len(samples) == 2 and all(len(x) >= 2 for x in samples):
             test = stats.ttest_ind(samples[0], samples[1], equal_var=False)
             pooled = np.sqrt((np.var(samples[0], ddof=1) + np.var(samples[1], ddof=1)) / 2)
             d = (np.mean(samples[0]) - np.mean(samples[1])) / pooled if pooled > 0 else np.nan
@@ -120,7 +119,7 @@ def _choose_test(df, question):
                           method="Welch's independent-samples t-test, two-sided; unequal variances are not assumed.")
             if min(map(len, samples)) < 5:
                 result["warnings"].append("At least one comparison group has fewer than five observations.")
-        elif len(samples) >= 3:
+        elif len(samples) >= 3 and all(len(x) >= 2 for x in samples):
             test = stats.f_oneway(*samples)
             grand = subset[target].mean()
             ss_between = sum(len(x) * (np.mean(x) - grand) ** 2 for x in samples)
@@ -135,7 +134,7 @@ def _choose_test(df, question):
                           method="One-way ANOVA; assumes independent observations and approximately normal residuals with comparable variances.")
             result["warnings"].append("Automatic ANOVA does not run post-hoc pairwise comparisons or verify independence/normality/homoscedasticity.")
         else:
-            result["warnings"].append("Not enough groups with at least two observations for a group comparison.")
+            result["warnings"].append("The selected grouping variable does not provide at least two observations in every comparison group; no inferential test was run.")
     elif target in categorical and group and target != group:
         subset = df[[target, group]].dropna()
         table = pd.crosstab(subset[group], subset[target])
