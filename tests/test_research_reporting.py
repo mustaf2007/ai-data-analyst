@@ -47,3 +47,38 @@ def test_research_pdf_is_created():
     report = build_research_report(sample(), "Does income differ by region?")
     data = build_research_pdf(report)
     assert data.startswith(b"%PDF")
+
+
+def test_research_report_applies_selected_alpha_to_interpretation_and_priority(monkeypatch):
+    from types import SimpleNamespace
+    import research_reporting
+
+    monkeypatch.setattr(
+        research_reporting.stats,
+        "ttest_ind",
+        lambda *args, **kwargs: SimpleNamespace(statistic=2.1, pvalue=0.04),
+    )
+    data = sample()
+    strict = build_research_report(data, "Does income differ by region?", alpha=0.01)
+    lenient = build_research_report(data, "Does income differ by region?", alpha=0.10)
+
+    assert strict["test"]["significant_at_alpha"] is False
+    assert "Insufficient evidence" in strict["test"]["interpretation"]
+    test_recommendation = lambda report: next(
+        row["Priority"] for _, row in report["recommendations"].iterrows()
+        if "Welch" in row["Evidence"]
+    )
+    assert test_recommendation(strict) == "Medium"
+    assert lenient["test"]["significant_at_alpha"] is True
+    assert "Evidence of a difference" in lenient["test"]["interpretation"]
+    assert test_recommendation(lenient) == "High"
+
+
+def test_research_report_selects_two_distinct_numeric_variables_for_correlation():
+    data = pd.DataFrame({
+        "income": [1, 2, 3, 4, 5, 6],
+        "expenditure": [2, 4, 5, 8, 9, 12],
+    })
+    report = build_research_report(data, "What is the relationship involving income?")
+    assert report["test"]["test"] == "Pearson correlation test"
+    assert {report["test"]["outcome"], report["test"]["group"]} == {"income", "expenditure"}

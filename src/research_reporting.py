@@ -83,7 +83,7 @@ def _correlations(df):
     return pd.DataFrame(rows).sort_values("Pearson r", key=lambda x: x.abs(), ascending=False) if rows else pd.DataFrame()
 
 
-def _choose_test(df, question):
+def _choose_test(df, question, alpha=0.05):
     numeric = df.select_dtypes(include="number").columns.tolist()
     categorical = [c for c in df.columns if not pd.api.types.is_numeric_dtype(df[c])
                    and 1 < df[c].nunique(dropna=True) <= 20]
@@ -113,9 +113,9 @@ def _choose_test(df, question):
                           statistic=float(test.statistic), p_value=float(test.pvalue),
                           effect_size=float(d) if np.isfinite(d) else None,
                           effect_size_name="Cohen's d (approx.)",
-                          interpretation=("Evidence of a difference in group means at alpha=0.05; this is not proof of causation."
-                                          if test.pvalue < .05 else
-                                          "Insufficient evidence of a difference in group means at alpha=0.05."),
+                          interpretation=(f"Evidence of a difference in group means at alpha={alpha:g}; this is not proof of causation."
+                                          if test.pvalue < alpha else
+                                          f"Insufficient evidence of a difference in group means at alpha={alpha:g}."),
                           method="Welch's independent-samples t-test, two-sided; unequal variances are not assumed.")
             if min(map(len, samples)) < 5:
                 result["warnings"].append("At least one comparison group has fewer than five observations.")
@@ -128,9 +128,9 @@ def _choose_test(df, question):
             result.update(test="One-way ANOVA", n=len(subset), statistic=float(test.statistic),
                           p_value=float(test.pvalue), effect_size=float(eta) if np.isfinite(eta) else None,
                           effect_size_name="Eta-squared",
-                          interpretation=("Evidence that at least one group mean differs at alpha=0.05; follow-up comparisons are not performed."
-                                          if test.pvalue < .05 else
-                                          "Insufficient evidence that group means differ at alpha=0.05."),
+                          interpretation=(f"Evidence that at least one group mean differs at alpha={alpha:g}; follow-up comparisons are not performed."
+                                          if test.pvalue < alpha else
+                                          f"Insufficient evidence that group means differ at alpha={alpha:g}."),
                           method="One-way ANOVA; assumes independent observations and approximately normal residuals with comparable variances.")
             result["warnings"].append("Automatic ANOVA does not run post-hoc pairwise comparisons or verify independence/normality/homoscedasticity.")
         else:
@@ -147,9 +147,9 @@ def _choose_test(df, question):
                           statistic=float(test.statistic), p_value=float(test.pvalue),
                           effect_size=float(v) if np.isfinite(v) else None,
                           effect_size_name="Cramer's V",
-                          interpretation=("Evidence of an association between the categorical variables at alpha=0.05; this is not causation."
-                                          if test.pvalue < .05 else
-                                          "Insufficient evidence of an association at alpha=0.05."),
+                          interpretation=(f"Evidence of an association between the categorical variables at alpha={alpha:g}; this is not causation."
+                                          if test.pvalue < alpha else
+                                          f"Insufficient evidence of an association at alpha={alpha:g}."),
                           method="Pearson chi-square test of independence without continuity correction.")
             if (test.expected_freq < 5).any():
                 result["warnings"].append("Some expected cell counts are below five; the chi-square approximation may be unreliable.")
@@ -157,16 +157,19 @@ def _choose_test(df, question):
             result["warnings"].append("The selected categorical variables do not form a usable contingency table.")
     elif len(numeric) >= 2 and any(x in q for x in {"relationship", "correlation", "associated", "association", "related"}):
         matches = _match_columns(question, numeric)
-        a, b = (matches + numeric)[:2]
+        ordered_columns = list(dict.fromkeys(matches + numeric))
+        if len(ordered_columns) < 2:
+            return result
+        a, b = ordered_columns[:2]
         pair = df[[a, b]].dropna()
         if len(pair) >= 3 and pair[a].nunique() > 1 and pair[b].nunique() > 1:
             test = stats.pearsonr(pair[a], pair[b])
             result.update(test="Pearson correlation test", outcome=a, group=b, n=len(pair),
                           statistic=float(test.statistic), p_value=float(test.pvalue),
                           effect_size=float(test.statistic), effect_size_name="Pearson r",
-                          interpretation=("Evidence of a linear association at alpha=0.05; correlation does not establish causation."
-                                          if test.pvalue < .05 else
-                                          "Insufficient evidence of a linear association at alpha=0.05."),
+                          interpretation=(f"Evidence of a linear association at alpha={alpha:g}; correlation does not establish causation."
+                                          if test.pvalue < alpha else
+                                          f"Insufficient evidence of a linear association at alpha={alpha:g}."),
                           method="Two-sided Pearson correlation test on complete pairs.")
     return result
 
@@ -196,7 +199,7 @@ def _charts(df, question):
     return charts
 
 
-def _recommendations(profile, test, correlations, categories):
+def _recommendations(profile, test, correlations, categories, alpha=0.05):
     recs = []
     if profile["missing_cells"]:
         recs.append({"Priority": "High", "Recommendation": "Investigate missingness patterns and causes before imputation or modelling.",
@@ -205,7 +208,7 @@ def _recommendations(profile, test, correlations, categories):
         recs.append({"Priority": "Medium", "Recommendation": "Review duplicated records against source identifiers and collection procedures before removing them.",
                      "Evidence": f'{profile["duplicate_rows"]:,} exact duplicate rows.'})
     if test.get("p_value") is not None:
-        recs.append({"Priority": "High" if test["p_value"] < .05 else "Medium",
+        recs.append({"Priority": "High" if test["p_value"] < alpha else "Medium",
                      "Recommendation": "Validate the study design and assumptions, then investigate the observed group difference or association with domain context.",
                      "Evidence": f'{test["test"]}: p={test["p_value"]:.4g}; effect size {test.get("effect_size_name") or "not available"}={_fmt(test.get("effect_size"))}.'})
     if not recs:
@@ -233,7 +236,7 @@ def build_research_report(df: pd.DataFrame, research_question: str, *,
     numeric = _numeric_summary(df)
     categories = _category_summary(df)
     correlations = _correlations(df)
-    test = _choose_test(df, research_question)
+    test = _choose_test(df, research_question, alpha=alpha)
     if test.get("p_value") is not None:
         test["significant_at_alpha"] = bool(test["p_value"] < alpha)
         test["alpha"] = alpha
@@ -242,7 +245,7 @@ def build_research_report(df: pd.DataFrame, research_question: str, *,
         else:
             test["interpretation"] = test["interpretation"].replace("alpha=0.05", f"alpha={alpha:g}")
     charts = _charts(df, research_question)
-    recommendations = _recommendations(profile, test, correlations, categories)
+    recommendations = _recommendations(profile, test, correlations, categories, alpha=alpha)
     findings = [
         f"The dataset contains {profile['rows']:,} records and {profile['columns']:,} variables.",
         f"{profile['missing_cells']:,} cells are missing ({profile['missing_pct']:.1f}% of all cells); {profile['duplicate_rows']:,} exact duplicate rows were detected.",
