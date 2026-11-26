@@ -24,7 +24,7 @@ from smart_assistant import ask_smart_assistant, build_dataset_context
 
 st.set_page_config(page_title="AI Data Analyst", page_icon="📊", layout="wide")
 st.title("📊 AI Data Analyst")
-st.caption("Universal Data Intelligence · Local-first analytics · Open-source Python · No paid APIs")
+st.caption("Universal Data Intelligence · Local-first analytics · Optional AI providers")
 
 
 def excel_bytes(dataframe):
