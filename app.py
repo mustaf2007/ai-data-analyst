@@ -1403,17 +1403,44 @@ with tabs[17]:
                 report_type=technical_type,
                 purpose=technical_purpose.strip(),
             )
+            report_findings = narrative["findings"] + [
+                "Recommendation: " + item for item in narrative["recommendations"]
+            ]
+            financial_metrics = narrative.get("financial_analysis", {}).get("metrics", {})
+            if "portfolio_return_pct" in financial_metrics:
+                report_findings.append(
+                    "Total portfolio return: {:.2f}% (P&L: USD {:,.2f}).".format(
+                        financial_metrics["portfolio_return_pct"],
+                        financial_metrics["portfolio_pnl"],
+                    )
+                )
+            if "invested_sleeve_return_pct" in financial_metrics:
+                report_findings.append(
+                    "Invested-sleeve return: {:.2f}% (P&L: USD {:,.2f}).".format(
+                        financial_metrics["invested_sleeve_return_pct"],
+                        financial_metrics["invested_sleeve_pnl"],
+                    )
+                )
+            if "reported_fees" in financial_metrics:
+                report_findings.append(
+                    "Reported fees / brokerage: USD {:,.2f}; not deducted again.".format(
+                        financial_metrics["reported_fees"]
+                    )
+                )
+            report_sections = [
+                "Dataset overview", "Key findings", "Numeric summary",
+                "Correlation matrix",
+            ]
+            if "financial" in technical_type.lower() or "investment" in technical_type.lower():
+                report_sections.append("Financial performance attribution")
             narrative_pdf = build_pdf_report(
                 st.session_state.source, df, p, numeric_summary(df),
-                narrative["findings"] + ["Recommendation: " + item for item in narrative["recommendations"]],
+                report_findings,
                 report_title=narrative["title"],
                 prepared_by=narrative["prepared_by"],
                 executive_summary=narrative["executive_summary"],
                 methodology=narrative["methodology"],
-                sections=[
-                    "Dataset overview", "Key findings", "Numeric summary",
-                    "Correlation matrix",
-                ],
+                sections=report_sections,
             )
             narrative_excel = excel_analysis_bytes(df, p, numeric_summary(df))
             st.session_state.narrative_report_artifacts = {
