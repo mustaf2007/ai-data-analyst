@@ -139,7 +139,7 @@ def build_narrative_report(df: pd.DataFrame, source: str = "Uploaded dataset") -
         display = frame.copy()
         for col in display.select_dtypes(include="number").columns:
             display[col] = display[col].map(_fmt)
-        return display.to_markdown(index=False)
+        headers = [str(column) for column in display.columns]\n        rows = [[str(value) for value in row] for row in display.astype(str).itertuples(index=False, name=None)]\n        return "| " + " | ".join(headers) + " |\\n| " + " | ".join(["---"] * len(headers)) + " |\\n" + "\\n".join("| " + " | ".join(row) + " |" for row in rows)
 
     executive = (
         f"The dataset **{source}** contains {profile['rows']:,} rows and "
