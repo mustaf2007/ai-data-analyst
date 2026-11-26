@@ -113,9 +113,9 @@ def _choose_test(df, question, alpha=0.05):
                           statistic=float(test.statistic), p_value=float(test.pvalue),
                           effect_size=float(d) if np.isfinite(d) else None,
                           effect_size_name="Cohen's d (approx.)",
-                          interpretation=("Evidence of a difference in group means at alpha=0.05; this is not proof of causation."
+                          interpretation=(f"Evidence of a difference in group means at alpha={alpha:g}; this is not proof of causation."
                                           if test.pvalue < alpha else
-                                          "Insufficient evidence of a difference in group means at alpha=0.05."),
+                                          f"Insufficient evidence of a difference in group means at alpha={alpha:g}."),
                           method="Welch's independent-samples t-test, two-sided; unequal variances are not assumed.")
             if min(map(len, samples)) < 5:
                 result["warnings"].append("At least one comparison group has fewer than five observations.")
@@ -128,9 +128,9 @@ def _choose_test(df, question, alpha=0.05):
             result.update(test="One-way ANOVA", n=len(subset), statistic=float(test.statistic),
                           p_value=float(test.pvalue), effect_size=float(eta) if np.isfinite(eta) else None,
                           effect_size_name="Eta-squared",
-                          interpretation=("Evidence that at least one group mean differs at alpha=0.05; follow-up comparisons are not performed."
-                                          if test.pvalue < .05 else
-                                          "Insufficient evidence that group means differ at alpha=0.05."),
+                          interpretation=(f"Evidence that at least one group mean differs at alpha={alpha:g}; follow-up comparisons are not performed."
+                                          if test.pvalue < alpha else
+                                          f"Insufficient evidence that group means differ at alpha={alpha:g}."),
                           method="One-way ANOVA; assumes independent observations and approximately normal residuals with comparable variances.")
             result["warnings"].append("Automatic ANOVA does not run post-hoc pairwise comparisons or verify independence/normality/homoscedasticity.")
         else:
@@ -147,9 +147,9 @@ def _choose_test(df, question, alpha=0.05):
                           statistic=float(test.statistic), p_value=float(test.pvalue),
                           effect_size=float(v) if np.isfinite(v) else None,
                           effect_size_name="Cramer's V",
-                          interpretation=("Evidence of an association between the categorical variables at alpha=0.05; this is not causation."
-                                          if test.pvalue < .05 else
-                                          "Insufficient evidence of an association at alpha=0.05."),
+                          interpretation=(f"Evidence of an association between the categorical variables at alpha={alpha:g}; this is not causation."
+                                          if test.pvalue < alpha else
+                                          f"Insufficient evidence of an association at alpha={alpha:g}."),
                           method="Pearson chi-square test of independence without continuity correction.")
             if (test.expected_freq < 5).any():
                 result["warnings"].append("Some expected cell counts are below five; the chi-square approximation may be unreliable.")
@@ -164,9 +164,9 @@ def _choose_test(df, question, alpha=0.05):
             result.update(test="Pearson correlation test", outcome=a, group=b, n=len(pair),
                           statistic=float(test.statistic), p_value=float(test.pvalue),
                           effect_size=float(test.statistic), effect_size_name="Pearson r",
-                          interpretation=("Evidence of a linear association at alpha=0.05; correlation does not establish causation."
-                                          if test.pvalue < .05 else
-                                          "Insufficient evidence of a linear association at alpha=0.05."),
+                          interpretation=(f"Evidence of a linear association at alpha={alpha:g}; correlation does not establish causation."
+                                          if test.pvalue < alpha else
+                                          f"Insufficient evidence of a linear association at alpha={alpha:g}."),
                           method="Two-sided Pearson correlation test on complete pairs.")
     return result
 
