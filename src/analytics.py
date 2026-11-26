@@ -29,11 +29,18 @@ def load_dataset(filename: str, content: bytes) -> pd.DataFrame:
     except Exception as exc: raise DataInputError(f"Could not read file: {exc}") from exc
     if df.empty: raise DataInputError("The file contains no data rows.")
     if len(df) > MAX_ROWS or df.shape[1] > MAX_COLUMNS: raise DataInputError("Dataset exceeds row or column safeguards.")
-    cols, seen = [], {}
+    # Make every header unique, including collisions between generated suffixes
+    # and names that already exist in the source file (for example: a, a, a.1).
+    cols, used = [], set()
     for raw in df.columns:
-        name = str(raw).strip() or "unnamed"
-        seen[name] = seen.get(name, 0) + 1
-        cols.append(name if seen[name] == 1 else f"{name}_{seen[name]}")
+        base = str(raw).strip() or "unnamed"
+        candidate = base
+        suffix = 0
+        while candidate in used:
+            suffix += 1
+            candidate = f"{base}.{suffix}"
+        used.add(candidate)
+        cols.append(candidate)
     df.columns = cols
     return df
 
