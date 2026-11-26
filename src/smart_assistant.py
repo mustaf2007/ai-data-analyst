@@ -28,6 +28,18 @@ def build_dataset_context(df: pd.DataFrame, source: str = "Active dataset") -> s
     for col in categorical[:10]:
         counts = df[col].astype("string").fillna("(Missing)").value_counts().head(8)
         lines.append(f"Top values for {col}: " + ", ".join(f"{k}={v}" for k, v in counts.items()))
+    # Compact group-by evidence helps the model explain segment performance without
+    # exposing row-level records.
+    if not numeric.empty:
+        group_columns = [
+            c for c in df.columns
+            if not pd.api.types.is_numeric_dtype(df[c])
+            and 1 < df[c].nunique(dropna=True) <= 20
+        ]
+        for group_col in group_columns[:4]:
+            grouped = df.groupby(group_col, dropna=False)[numeric.columns[:5].tolist()].agg(["count", "mean", "sum"])
+            lines.append(f"Grouped numeric summaries by {group_col} (count, mean, sum):")
+            lines.append(grouped.round(3).to_string(max_rows=12, max_cols=15))
     lines.append("Privacy note: this context contains schema and aggregate summaries, not raw record rows.")
     return "\n".join(lines)
 
@@ -42,6 +54,15 @@ def _setting(name: str, default: str = "") -> str:
         return str(st.secrets.get(name, default)).strip()
     except Exception:
         return default
+
+
+def default_assistant_provider() -> str:
+    """Prefer a configured generative provider; otherwise use deterministic tools."""
+    if _setting("OPENAI_API_KEY", ""):
+        return "OpenAI-compatible API (opt-in)"
+    if _setting("OLLAMA_BASE_URL", ""):
+        return "Ollama (local model)"
+    return "Dataset tools (no AI server)"
 
 
 def _post_json(url: str, payload: dict, headers: dict | None = None, timeout: int = 90) -> dict:
