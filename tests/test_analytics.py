@@ -649,7 +649,7 @@ def test_header_normalization_handles_generated_suffix_collisions():
 def test_load_csv_treats_whitespace_only_text_cells_as_missing():
     df = load_dataset(
         "whitespace.csv",
-        b"region,amount,notes\\nNorth,10,valid\\n   ,20,   \\nSouth,30,\\n",
+        b"region,amount,notes\nNorth,10,valid\n   ,20,   \nSouth,30,\n",
     )
     assert pd.isna(df.loc[1, "region"])
     assert pd.isna(df.loc[1, "notes"])
