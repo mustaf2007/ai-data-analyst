@@ -17,7 +17,7 @@ from analytics import (
     infer_datetime_columns, generate_insights, generate_detailed_insights, build_data_story, safe_csv_bytes, build_cleaning_report, validate_analysis_readiness, column_quality_diagnostics,
 )
 from modeling import train_predictive_model, detect_anomalies
-from reporting import build_pdf_report
+from reporting import build_pdf_report, build_text_report_pdf
 from assistant import suggest_analyses, answer_dataset_question
 from report_assistant import build_narrative_report
 from smart_assistant import ask_smart_assistant, build_dataset_context
@@ -1508,6 +1508,39 @@ with tabs[18]:
                 "role": "assistant", "content": f"Assistant unavailable: {exc}",
             })
         st.rerun()
+
+    latest_assistant = next(
+        (item for item in reversed(st.session_state.smart_chat_history)
+         if item.get("role") == "assistant" and item.get("content")),
+        None,
+    )
+    if latest_assistant:
+        st.divider()
+        st.markdown("#### Export latest assistant response")
+        export_md, export_pdf = st.columns(2)
+        export_md.download_button(
+            "Download response as Markdown",
+            latest_assistant["content"],
+            "smart_assistant_response.md",
+            "text/markdown",
+            key="download_smart_response_md",
+            use_container_width=True,
+        )
+        try:
+            smart_pdf = build_text_report_pdf(
+                latest_assistant["content"],
+                report_title="AI Smart Assistant | Technical Report",
+            )
+            export_pdf.download_button(
+                "Download response as PDF",
+                smart_pdf,
+                "smart_assistant_technical_report.pdf",
+                "application/pdf",
+                key="download_smart_response_pdf",
+                use_container_width=True,
+            )
+        except Exception as exc:
+            st.caption(f"PDF export unavailable: {exc}")
 
     if st.button("Clear smart assistant conversation", key="clear_smart_assistant"):
         st.session_state.smart_chat_history = []
